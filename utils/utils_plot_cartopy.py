@@ -59,6 +59,7 @@ class PlotTools_cartopy():
                        s, alpha, precip_bounds=[1, 2, 6, 10, 15, 20, 30, 40, 50, 70, 90, 110, 130, 150, 200, 300], edgecolors=None):
         bounds= np.array(precip_bounds)
         cmap  = plt.cm.jet
+        cmap.set_under('1')
         norm  = mpl.colors.BoundaryNorm(bounds, cmap.N, extend='both')
         im    = axe.scatter(lon, lat, c=precip, s=s, 
                             cmap=cmap, norm=norm, alpha=alpha, edgecolors=edgecolors)

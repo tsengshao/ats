@@ -1,0 +1,6 @@
+*.nc
+*.png
+*.mp4
+*.npy
+*.npz
+__pycache__

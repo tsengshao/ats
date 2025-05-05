@@ -55,14 +55,18 @@ class PlotTools_cartopy():
         else:
             pass
         return imtopoh
+
+    def get_cmap_of_pcp(self, bounds=np.array([1, 5, 10, 15, 25])):
+        bounds= np.array(bounds)
+        cmap  = plt.cm.jet
+        cmap.set_under((1,1,1,0.))
+        norm  = mpl.colors.BoundaryNorm(bounds, cmap.N, extend='max')
+        return bounds, norm, cmap
         
     def Plot_twcwb_pcp(self, axe, 
                        lon, lat, precip,
                        s, alpha, precip_bounds=[1, 2, 6, 10, 15, 20, 30, 40, 50, 70, 90, 110, 130, 150, 200, 300], edgecolors=None):
-        bounds= np.array(precip_bounds)
-        cmap  = plt.cm.jet
-        cmap.set_under('1')
-        norm  = mpl.colors.BoundaryNorm(bounds, cmap.N, extend='both')
+        bounds, norm, cmap = self.get_cmap_of_pcp(precip_bounds)
         im    = axe.scatter(lon, lat, c=precip, s=s, 
                             cmap=cmap, norm=norm, alpha=alpha, edgecolors=edgecolors)
         return im

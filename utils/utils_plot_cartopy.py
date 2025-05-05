@@ -22,10 +22,12 @@ class PlotTools_cartopy():
         if len(grid_info)>0:
             if grid_info['xloc_'] is not None:
                 axe.set_xticks(grid_info['xloc_'], crs=self.proj)
-                axe.set_xticklabels(['' for i in range(len(grid_info['xloc_']))])  # default: no tick labels
+                #axe.set_xticklabels(['' for i in range(len(grid_info['xloc_']))])  # default: no tick labels
+                axe.set_xticklabels([f'{int(i)}E' for i in grid_info['xloc_']])
             if grid_info['yloc_'] is not None:
                 axe.set_yticks(grid_info['yloc_'], crs=self.proj)
-                axe.set_yticklabels(['' for i in range(len(grid_info['yloc_']))])
+                #axe.set_yticklabels(['' for i in range(len(grid_info['yloc_']))])
+                axe.set_yticklabels([f'{int(i)}N' for i in grid_info['yloc_']])
             gl = axe.gridlines(xlocs=grid_info['xloc_'], ylocs=grid_info['yloc_'],
                                draw_labels=False)
         return axe
@@ -75,11 +77,12 @@ def Plot_cwb_comp(rainfall_label:str, stn_lon, stn_lat, precip_array, figtitle=F
         bounds    = np.array([1, 5, 10, 15, 25])
         alpha     = 0.75
     # Figure initialize
-    fig = plt.figure(figsize=(4, 8))
-    gs  = mpl.gridspec.GridSpec(1, 1, figure=fig)
+    #fig = plt.figure(figsize=(4, 8))
+    #gs  = mpl.gridspec.GridSpec(1, 1, figure=fig)
+    fig, ax = plt.subplots(figsize=(4,8))
     ## Plot:
     plottools = PlotTools_cartopy()
-    ax1   = plottools.Axe_map(fig, gs[0], xlim_=[119.95, 122.05], ylim_=[21.85, 25.5],
+    ax1   = plottools.Axe_map(fig, ax, xlim_=[119.95, 122.05], ylim_=[21.85, 25.5],
                               xloc_=np.arange(120, 122.1, 1), yloc_=np.arange(22, 25.1, 1))
     plottools.Plot_vvm_map(ax1, '0.5', 1.5)  # coastline
     temp = np.argsort(precip_array)

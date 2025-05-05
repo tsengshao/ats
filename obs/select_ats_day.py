@@ -20,6 +20,18 @@ def get_ivt_intensity(nowtime):
     ivt_direction = (270-np.arctan2(ivt_x,ivt_y)*180/np.pi)%360 
     return ivt_intensity, ivt_direction, ivt_x, ivt_y
 
+def get_ivt_tc(nowtime):
+    lonb = [115, 130]
+    latb = [15, 30]
+    levb = [1000., 700.]
+    lon_e,  lat_e,  lev_e, u_e   = uread.read_era5_3d('u',nowtime,lonb,latb,levb)
+    lon_e,  lat_e,  lev_e, v_e   = uread.read_era5_3d('v',nowtime,lonb,latb,levb)
+    lon_e,  lat_e,  lev_e, q_e   = uread.read_era5_3d('q',nowtime,lonb,latb,levb)
+    ivt_x = -1./9.8*np.trapezoid(u_e*q_e, x=lev_e*100., axis=0)
+    ivt_y = -1./9.8*np.trapezoid(v_e*q_e, x=lev_e*100., axis=0)
+    ivt_intensity_max = np.sqrt(ivt_x**2+ivt_y**2).max()
+    ivt_is_tc = ivt_intensity_max>1000.
+    return ivt_is_tc, ivt_intensity_max
 wtab_module  = ucwa.weather_table(year_list =np.arange(2005, 2021).tolist(),
                                   month_list=np.arange(5,10).tolist(), 
                                   lat_range=(22, 20), lon_range=(115, 119))
@@ -50,6 +62,8 @@ for year in range(year_start,year_end+1):
         pcp_table       = wtab_module.get_cwb_precip_table(datestr,
                                                            accumulate_daily=False)
         ivt_intensity, ivt_direction, ivt_x, ivt_y = get_ivt_intensity(nowdate)
+        tc_day, ivt_intensity_max =  get_ivt_tc(nowdate)
+
         diurnal_array = np.vstack(pcp_table['precip'])
         idx = np.nonzero(~np.all(diurnal_array,axis=1))[0]
         diurnal_array = diurnal_array[idx,:]
@@ -66,7 +80,7 @@ for year in range(year_start,year_end+1):
                      (np.nanmean(morning)<np.nanmean(afternoon))
         huai_idx  = np.any(huang_date==nowdate)
         stacy_idx = (ivt_intensity<400.)#*(ivt_direction<260)*(ivt_direction>190)
-        shao_idx  = condiction*stacy_idx
+        shao_idx  = condiction*stacy_idx*(~tc_day)
 
         index_shao = 1 if shao_idx else 0
         index_huai = 1 if huai_idx else 0

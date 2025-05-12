@@ -5,6 +5,7 @@ sys.path.insert(0,'../utils')
 from datetime import datetime, timedelta
 import h5py
 import multiprocessing
+import xarray as xr
 
 def crop_data(lonb, latb, lon, lat, data, zaxis=0):
     ilon0 = np.argmin(np.abs(lonb[0]-lon))
@@ -103,6 +104,53 @@ def read_oisst(varname,nowtime,lonb=None,latb=None):
         lon, lat, data = crop_data(lonb, latb, lon, lat, data, zaxis=0)
     return lon, lat, data
 
+def read_gsrm(model,varname,nowtime,lonb=None,latb=None,levb=None):
+    # /data/C.shaoyu/hackathon/icon/PT1H_inst/vas.nc
+    mname = model.lower()
+    vname = varname.lower()
+    if varname in ['pr', 'uas', 'vas']:
+        grid_dict = {'icon':'PT1H_inst', 'nicam':'2d1h'}
+        dtype = '2d'
+    elif varname in ['clivi', 'clwvi', 'hflsd', 'hfssd', 'prw',	'ps']:
+        grid_dict = {'icon':'PT3H_mean', 'nicam':'2d3h'}
+        dtype = '2d'
+    elif varname in ['hur', 'hus', 'qall', 'ta', 'ua', 'va', 'wa', 'zg']:
+        grid_dict = {'icon':'PT6H_inst', 'nicam':'3d6h'}
+        dtype = '3d'
+    grid = grid_dict[mname]
+    fname=f'/data/C.shaoyu/hackathon/{mname}/{grid}/{vname}.nc'
+    ds = xr.open_dataset(fname)
+    if mname=='nicam' and grid_dict['nicam']=='2d1h':
+        datatime = nowtime+timedelta(minutes=30)
+    elif mname=='nicam' and grid_dict['nicam']=='2d3h':
+        datatime = nowtime+timedelta(minutes=90)
+    else:
+        datatime = nowtime
+    tstr=datatime.strftime('%Y-%m-%dT%H:%M:%S')
+    data_da = ds[vname].sel(time=tstr)
+    data = np.squeeze(ds[vname].sel(time=tstr).values)
+    lon  = ds.lon.values
+    lat  = ds.lat.values
+    if dtype=='3d':
+        if mname=='nicam':
+            lev = ds.lev.values
+        elif mname=='icon':
+            lev = ds.pressure.values/100.
+        if lev[-1] - lev[0] > 0: # reverse levs
+            lev  = lev[::-1]
+            data = data[::-1, ...]
+    if lonb and latb:
+        lon, lat, data = crop_data(lonb, latb, lon, lat, data, zaxis=0)
+    if levb and dtype=='3d':
+        ilev0 = np.argmin(np.abs(lev-levb[0]))
+        ilev1 = np.argmin(np.abs(lev-levb[1]))+1
+        data = data[ilev0:ilev1,:,:]
+        lev  = lev[ilev0:ilev1]
+    if dtype=='3d':
+        return lon, lat, lev, data, data_da
+    elif dtype=='2d':
+        return lon, lat, data, data_da
+    
 def read_era5_2d(varname, nowtime,lonb=None,latb=None):
     yyyy   = nowtime.year
     mm     = nowtime.month

@@ -40,7 +40,7 @@ while (1)
   
   'color 'topocmap
   'd height.2(t=1,z=1)*1000.'
-  'xcbar 9.2 9.5 0.8 7.55'
+  'xcbar 8.5 8.8 0.8 7.55'
   'set gxout contour'
   'set clab off'
   'set clevs 0'
@@ -50,14 +50,20 @@ while (1)
 
   'color 'raincmap
   'd ave(sprec.1,t=2,t=145)*3600*24'
-  'xcbar 8.5 8.8 0.8 7.55'
+  'xcbar 7.8 8.1 0.8 7.55'
 
   'set string 1 bl 10 0'
   'set strsiz 0.25'
-  'draw string 3 7.7 TaiwanVVM'case' daily [mm`a `nd`a-1`n]'
+  'draw string 3.6 7.7 TaiwanVVM'
+
+  'set string 1 br 10 0'
+  'set strsiz 0.2'
+  'draw string 8.8 7.7 'case
+  'draw string 8.8 8 daily [mm`a `nd`a-1`n]'
+
   '! mkdir -p ./fig/taiwanvvm/daily/'
   'gxprint ./fig/taiwanvvm/daily/ats_'case'.png x1100 y850'
-  
+
   it=1
   while(it<=24)
   'c'
@@ -79,7 +85,7 @@ while (1)
 *  'color 0 3000 500 -gxout shaded -kind white->(150,150,150)'
   'color 'topocmap
   'd height.2(t=1,z=1)*1000.'
-  'xcbar 9.2 9.5 0.8 7.55'
+  'xcbar 8.5 8.8 0.8 7.55'
   'set gxout contour'
   'set clab off'
   'set clevs 0'
@@ -90,12 +96,18 @@ while (1)
 *  'color -levs 1 3 5 7 10 15 20 -gxout grfill -kind (255,255,255,0)->grainbow'
   'color 'raincmap
   'd ave(sprec.1,t='t0',t='t1')*3600'
-  'xcbar 8.5 8.8 0.8 7.55'
+  'xcbar 7.8 8.1 0.8 7.55'
   
   tstr=math_format('%02.0f', it)
   'set string 1 bl 10 0'
   'set strsiz 0.25'
-  'draw string 3 7.7 TaiwanVVM 'case' 'tstr'LT [mm`a `nhr`a-1`n]'
+  'draw string 3.6 7.7 TaiwanVVM'
+
+  'set string 1 br 10 0'
+  'set strsiz 0.2'
+  'draw string 8.8 7.7 'case
+  'draw string 8.8 8 'tstr'LT [mm`a `nhr`a-1`n]'
+
   
   '! mkdir -p ./fig/taiwanvvm/'case
   'gxprint ./fig/taiwanvvm/'case'/ats_'tstr'.png x1100 y850'

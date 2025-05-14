@@ -46,15 +46,21 @@ while (1)
   
   'color 'topocmap
   'd orog.2(t=1,z=1)'
-  'xcbar 9.2 9.5 0.8 7.55'
+  'xcbar 8.5 8.8 0.8 7.55'
 
   'color 'raincmap
   'd ave(pr.1,t='t0',t='t1')*3600*24'
-  'xcbar 8.5 8.8 0.8 7.55'
+  'xcbar 7.8 8.1 0.8 7.55'
 
   'set string 1 bl 10 0'
   'set strsiz 0.25'
-  'draw string 3 7.7 ICON'date' daily [mm`a `nd`a-1`n]'
+  'draw string 3.6 7.7 ICON'
+
+  'set string 1 br 10 0'
+  'set strsiz 0.2'
+  'draw string 8.8 7.7 'date
+  'draw string 8.8 8 daily [mm`a `nd`a-1`n]'
+
   '! mkdir -p ./fig/icon/daily/'
   'gxprint ./fig/icon/daily/ats_'date'.png x1100 y850'
   
@@ -75,17 +81,22 @@ while (1)
 *  'color 0 3000 500 -gxout shaded -kind white->(150,150,150)'
   'color 'topocmap
   'd orog.2(t=1,z=1)'
-  'xcbar 9.2 9.5 0.8 7.55'
+  'xcbar 8.5 8.8 0.8 7.55'
   
 *  'color -levs 1 3 5 7 10 15 20 -gxout grfill -kind (255,255,255,0)->grainbow'
   'color 'raincmap
   'd pr.1*3600'
-  'xcbar 8.5 8.8 0.8 7.55'
-  
+  'xcbar 7.8 8.1 0.8 7.55'
+
   tstr=math_format('%02.0f', it)
   'set string 1 bl 10 0'
   'set strsiz 0.25'
-  'draw string 3 7.7 ICON 'date' 'tstr'LT [mm`a `nhr`a-1`n]'
+  'draw string 3.6 7.7 ICON'
+
+  'set string 1 br 10 0'
+  'set strsiz 0.2'
+  'draw string 8.8 7.7 'date
+  'draw string 8.8 8 'tstr'LT [mm`a `nhr`a-1`n]'
   
   '! mkdir -p ./fig/icon/'date
   'gxprint ./fig/icon/'date'/ats_'tstr'.png x1100 y850'

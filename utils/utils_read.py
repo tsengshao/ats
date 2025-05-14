@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 import h5py
 import multiprocessing
 import xarray as xr
+import warnings
 
 def crop_data(lonb, latb, lon, lat, data, zaxis=0):
     ilon0 = np.argmin(np.abs(lonb[0]-lon))
@@ -104,7 +105,7 @@ def read_oisst(varname,nowtime,lonb=None,latb=None):
         lon, lat, data = crop_data(lonb, latb, lon, lat, data, zaxis=0)
     return lon, lat, data
 
-def read_gsrm(model,varname,nowtime,lonb=None,latb=None,levb=None):
+def read_gsrm(model,varname,nowtime,lonb=None,latb=None,levb=None, daily=False,tw_time=False):
     # /data/C.shaoyu/hackathon/icon/PT1H_inst/vas.nc
     mname = model.lower()
     vname = varname.lower()
@@ -117,18 +118,42 @@ def read_gsrm(model,varname,nowtime,lonb=None,latb=None,levb=None):
     elif varname in ['hur', 'hus', 'qall', 'ta', 'ua', 'va', 'wa', 'zg']:
         grid_dict = {'icon':'PT6H_inst', 'nicam':'3d6h'}
         dtype = '3d'
+    elif varname in ['orog', 'sftlf']:
+        grid_dict = {'nicam':'2dbc'}
+        dtype = '2d'
     grid = grid_dict[mname]
     fname=f'/data/C.shaoyu/hackathon/{mname}/{grid}/{vname}.nc'
     ds = xr.open_dataset(fname)
+
+    # process time position 
     if mname=='nicam' and grid_dict['nicam']=='2d1h':
         datatime = nowtime+timedelta(minutes=30)
     elif mname=='nicam' and grid_dict['nicam']=='2d3h':
         datatime = nowtime+timedelta(minutes=90)
     else:
         datatime = nowtime
+    if tw_time: datatime = datatime-timedelta(hours=8)
     tstr=datatime.strftime('%Y-%m-%dT%H:%M:%S')
+    if daily: tstr = tstr[:10]
+
+    # if topography, only on time 
+    if grid=='2dbc': tstr='1970-01-01T00:00:00'
+
+    if daily and tw_time:
+       d1 = datatime - timedelta(hours=8)
+       d2 = datatime + timedelta(hours=15)
+       tstr1 = d1.strftime('%Y-%m-%dT%H:%M:%S')
+       tstr2 = d2.strftime('%Y-%m-%dT%H:%M:%S')
+       tstr = slice(tstr1, tstr2)
+
     data_da = ds[vname].sel(time=tstr)
     data = np.squeeze(ds[vname].sel(time=tstr).values)
+    if daily:
+        #data = np.nanmean(data,axis=0)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=RuntimeWarning)
+            data = np.nanmean(data, axis=0)
+
     lon  = ds.lon.values
     lat  = ds.lat.values
     if dtype=='3d':
@@ -147,9 +172,9 @@ def read_gsrm(model,varname,nowtime,lonb=None,latb=None,levb=None):
         data = data[ilev0:ilev1,:,:]
         lev  = lev[ilev0:ilev1]
     if dtype=='3d':
-        return lon, lat, lev, data, data_da
+        return lon, lat, lev, data
     elif dtype=='2d':
-        return lon, lat, data, data_da
+        return lon, lat, data
     
 def read_era5_2d(varname, nowtime,lonb=None,latb=None):
     yyyy   = nowtime.year

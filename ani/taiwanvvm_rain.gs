@@ -5,7 +5,6 @@
 file='/data/C.shaoyu/ats/vvm/taiwanvvm_list.txt'
 
 topocmap='250 3000 250 -gxout shaded -kind white->(100,100,100)'
-raincmap='-levs 1 2 3 4 5 7 10 15 20 25 -gxout grfill -kind (255,255,255,0)->grainbow'
 raincmap='-levs 2 5 10 15 25 -gxout grfill -kind (255,255,255,0)-(0)->(84,104,245)->(11,191,38)->(242,226,5)->(242,5,5)->(204,7,204)'
 
 date='18JUN2020'
@@ -56,10 +55,13 @@ while (1)
   'set strsiz 0.25'
   'draw string 3.6 7.7 TaiwanVVM'
 
+  'set string 1 tl 10 0'
+  'set strsiz 0.15'
+  'draw string 3.6 7.4 'case
+
   'set string 1 br 10 0'
   'set strsiz 0.2'
-  'draw string 8.8 7.7 'case
-  'draw string 8.8 8 daily [mm`a `nd`a-1`n]'
+  'draw string 8.8 7.7 daily [mm`a `nd`a-1`n]'
 
   '! mkdir -p ./fig/taiwanvvm/daily/'
   'gxprint ./fig/taiwanvvm/daily/ats_'case'.png x1100 y850'
@@ -97,23 +99,26 @@ while (1)
   'color 'raincmap
   'd ave(sprec.1,t='t0',t='t1')*3600'
   'xcbar 7.8 8.1 0.8 7.55'
-  
+
   tstr=math_format('%02.0f', it)
   'set string 1 bl 10 0'
   'set strsiz 0.25'
   'draw string 3.6 7.7 TaiwanVVM'
 
+  'set string 1 tl 10 0'
+  'set strsiz 0.15'
+  'draw string 3.6 7.4 'case
+
   'set string 1 br 10 0'
   'set strsiz 0.2'
-  'draw string 8.8 7.7 'case
-  'draw string 8.8 8 'tstr'LT [mm`a `nhr`a-1`n]'
-
+  'draw string 9.1 7.7 'tstr'LT [mm`a `nhr`a-1`n]'
   
   '! mkdir -p ./fig/taiwanvvm/'case
   'gxprint ./fig/taiwanvvm/'case'/ats_'tstr'.png x1100 y850'
   
   it=it+1
   endwhile
+  exit
   'close 2'
   'close 1'
 *read file

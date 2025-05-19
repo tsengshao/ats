@@ -4,7 +4,7 @@
 
 model='taiwanvvm'
 mlarge='TaiwanVVM'
-ncase='30'
+ncase='32'
 
 topocmap='250 3000 250 -gxout shaded -kind white->(100,100,100)'
 raincmap='-levs 2 5 10 15 25 -gxout grfill -kind (255,255,255,0)-(0)->(84,104,245)->(11,191,38)->(242,226,5)->(242,5,5)->(204,7,204)'

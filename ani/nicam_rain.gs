@@ -4,6 +4,7 @@
 
 'sdfopen /data/C.shaoyu/hackathon/nicam/2d1h/pr.nc'
 'sdfopen /data/C.shaoyu/hackathon/nicam/2dbc/orog.nc'
+'sdfopen /data/C.shaoyu/hackathon/nicam/2dbc/sftlf.nc'
 file='/data/C.shaoyu/ats/obs/shao_ATdays_2020_2020_nicam.txt'
 
 
@@ -20,6 +21,7 @@ while (1)
   if (rc1); break; endif
   date = subwrd(line2,1)
   say date
+  date='13Jul2020'
 
   'set time 'date
   'q dim'
@@ -50,19 +52,21 @@ while (1)
   'xcbar 8.5 8.8 0.8 7.55'
 
   'color 'raincmap
-  'd ave(pr.1,t='t0',t='t1')*3600*24'
+  'define drain=ave(pr.1,t='t0',t='t1')*3600*24'
+  'd maskout(drain,sftlf.3(t=1,z=1)>0.2)'
   'xcbar 7.8 8.1 0.8 7.55'
 
   'set string 1 bl 10 0'
   'set strsiz 0.25'
   'draw string 3.6 7.7 NICAM'
 
+  'set string 1 tl 10 0'
+  'set strsiz 0.15'
+  'draw string 3.6 7.4 'date
+
   'set string 1 br 10 0'
   'set strsiz 0.2'
-  'draw string 8.8 7.7 'date
-  'draw string 8.8 8 daily [mm`a `nd`a-1`n]'
-
-
+  'draw string 8.8 7.7 daily [mm`a `nd`a-1`n]'
 
   '! mkdir -p ./fig/nicam/daily/'
   'gxprint ./fig/nicam/daily/ats_'date'.png x1100 y850'
@@ -88,7 +92,8 @@ while (1)
   
 *  'color -levs 1 3 5 7 10 15 20 -gxout grfill -kind (255,255,255,0)->grainbow'
   'color 'raincmap
-  'd pr.1*3600'
+  'define drain=pr.1*3600'
+  'd maskout(drain,sftlf.3(t=1,z=1)>0.2)'
   'xcbar 7.8 8.1 0.8 7.55'
   
   tstr=math_format('%02.0f', it)
@@ -96,17 +101,21 @@ while (1)
   'set strsiz 0.25'
   'draw string 3.6 7.7 NICAM'
 
+  'set string 1 tl 10 0'
+  'set strsiz 0.15'
+  'draw string 3.6 7.4 'date
+
   'set string 1 br 10 0'
   'set strsiz 0.2'
-  'draw string 8.8 7.7 'date
-  'draw string 8.8 8 'tstr'LT [mm`a `nhr`a-1`n]'
-
+  'draw string 8.8 7.7 'tstr'LT [mm`a `nhr`a-1`n]'
+  
   
   '! mkdir -p ./fig/nicam/'date
   'gxprint ./fig/nicam/'date'/ats_'tstr'.png x1100 y850'
   
   it=it+1
   endwhile
+  exit
 
 *read file
 endwhile

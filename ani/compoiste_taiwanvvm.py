@@ -72,7 +72,7 @@ if __name__=='__main__':
     lon_gs = plottools.ds_topo.lon.values
     lat_gs = plottools.ds_topo.lat.values
 
-    composite = np.zeros((1,lat.size,lon.size))
+    composite = np.zeros((1,lat.size_gs,lon_gs.size))
     composite[0] = pcp/3600/24
 
     ##### save data

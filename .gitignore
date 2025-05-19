@@ -4,3 +4,4 @@
 *.npy
 *.npz
 __pycache__
+obs/shao_ATdays_2020_2020_*.txt*

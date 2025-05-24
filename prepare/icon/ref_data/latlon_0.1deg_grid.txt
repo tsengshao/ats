@@ -1,0 +1,1 @@
+/work/shaoyu/GSRMs/prepare/nicam/ref_data/latlon_0.1deg_grid.txt

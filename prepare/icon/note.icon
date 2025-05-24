@@ -1,0 +1,8 @@
+path='/large/sftpgo/data/ICON/d3hp003.zarr/PT1H_inst_z9_atm'
+pr
+
+path='/large/sftpgo/data/ICON/d3hp003.zarr/PT3H_mean_z9_atm'
+clivi  clwvi hflsd hfssd ps  pr
+
+path='/large/sftpgo/data/ICON/d3hp003.zarr/PT6H_inst_z9_atm'
+hus  hur qall ta ua va zg wa

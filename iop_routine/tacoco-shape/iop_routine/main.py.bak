@@ -1,0 +1,145 @@
+# coding=utf-8
+import pandas as pd
+import numpy as np
+import random
+import os
+from xgboost import XGBClassifier
+
+df = pd.read_csv("./features_nan_sep_weak_afternoon_date.csv")
+df = df.drop(columns=["Unnamed: 0"])
+df = (df-df.min())/(df.max()-df.min())
+print(df.head(20))
+print(df.sum())
+
+
+# Control Seed Value
+SEED_VALUE = 8080888
+#SEED_VALUE = 9008889
+os.environ['PYTHONHASHSEED']=str(SEED_VALUE)
+random.seed(SEED_VALUE)
+np.random.seed(SEED_VALUE)
+
+### train valid test
+features_order = [
+    'CWVatDongsha','CWVatNETW', 'WSatBanqiao', 'WSatNETW', 'CrossStraitUatNWTW', 'UatNETW',
+    'swUatDongSha', 'swUatDongShaNaN', 'sUatNETW', 'sUatNETWNaN',
+    'swDEPTHatNETW', 'MSEatNETW', 'swLAYERatSWTW', 'IVTatDongSha',
+    'IVTatDongShaNaN', 'LeeVortex', 'CAPEatNETW', 'CRHatNETW',
+    'deltaCWVatTW', 'deltaLTSatSWTW', 'zetaatETW', 'seUatETW',
+    'month',
+    #'year','month','day'
+]
+
+features_order_id=[
+    'D10-01','B07-16','D10-03','R09-19','R10-07-1','R10-07-2',
+    'R10-01','R10-01-nan','R10-08','R10-08-nan',
+    'R09-01','R10-10','D08-02','R10-19,B08-14',
+    'R10-19,B08-14-nan','R10-07','B07-39','R08-07',
+    'B07-10','R10-29','R09-12-1','R09-12-2',
+    "month"
+]
+
+permute = np.random.permutation(np.arange(0,len(df)))
+test_sep_idx = len(permute) // 5 * 4
+valid_sep_idx = test_sep_idx // 5 * 4
+train_index = permute[0:valid_sep_idx]
+valid_index = permute[valid_sep_idx:test_sep_idx]
+test_index = permute[test_sep_idx:]
+
+train_x = []
+train_y = []
+train_date = []
+valid_x = []
+valid_y = []
+valid_date = []
+test_x = []
+test_y = []
+test_date = []
+
+iter_x = [train_x,valid_x,test_x]
+iter_y = [train_y,valid_y,test_y]
+iter_date = [train_date,valid_date,test_date]
+iter_index = [train_index,valid_index,test_index]
+
+
+for cu_set_idx in range(len(iter_x)):
+    total_y_non_zero = 0
+    for origin_set_idx in iter_index[cu_set_idx]:
+        cu_df = df.loc[[origin_set_idx]]
+        total_y_non_zero += cu_df.iloc[0]["weak-syn-afternoon-rainfall"]
+        
+    count_y_zero = 0
+    for origin_set_idx in iter_index[cu_set_idx]:
+        new_x = []
+        cu_df = df.loc[[origin_set_idx]]
+        
+        # prevent too much zero, perserve rare event
+        if cu_df.iloc[0]["weak-syn-afternoon-rainfall"] == 0 and count_y_zero == total_y_non_zero:
+            continue
+        
+        # predict only weak synoptic
+        if cu_df.iloc[0]["weak-synoptic"] == 0 :
+            continue        
+            
+        # limit month
+        if cu_df.iloc[0]["weak-synoptic"] == 0 :
+            continue        
+            
+        for feature in features_order:
+            new_x.append(cu_df.iloc[0][feature])
+        
+        iter_x[cu_set_idx].append(new_x)
+        iter_y[cu_set_idx].append(cu_df.iloc[0]["weak-syn-afternoon-rainfall"])
+        iter_date[cu_set_idx].append(
+            "{:4d}-{:02d}-{:02d}".format(
+                int(cu_df.iloc[0]["year"] * (2019-1996) + 1996),
+                int(cu_df.iloc[0]["month"] *(10-5) + 5),
+                int(cu_df.iloc[0]["day"] * (31-1) + 1),
+            )
+        )
+
+        if iter_y[cu_set_idx][-1] == 0:
+            count_y_zero += 1
+        
+    #iter_x[cu_set_idx] = np.array(iter_x[cu_set_idx])
+    #iter_y[cu_set_idx] = np.array(iter_y[cu_set_idx])
+
+#print(train_x[0])
+train_x =  np.array(train_x)
+train_y =  np.array(train_y)
+valid_x =  np.array(valid_x)
+valid_y =  np.array(valid_y)
+#train_x =  np.concatenate([train_x,valid_x])
+#train_y =  np.concatenate([train_y,valid_y])
+
+test_x  =  np.array(test_x)
+test_y  =  np.array(test_y)
+
+print(train_x.shape,train_y.shape)
+print(valid_x.shape,valid_y.shape)
+print(test_x.shape,test_y.shape)
+
+
+# Control Seed Value
+SEED_VALUE = 8080888
+
+os.environ['PYTHONHASHSEED']=str(SEED_VALUE)
+random.seed(SEED_VALUE)
+np.random.seed(SEED_VALUE)
+
+
+# 建立 XGBClassifier 模型
+xgboostModel = XGBClassifier(
+    #num_class=1,
+    use_label_encoder=False
+)
+# 使用訓練資料訓練模型
+xgboostModel.fit(train_x, train_y.astype(int))
+# 使用訓練資料預測分類
+predicted = xgboostModel.predict(train_x)
+
+print('Train set',xgboostModel.score(train_x,train_y))
+print('Valid set',xgboostModel.score(valid_x,valid_y))
+print('Test  set',xgboostModel.score(test_x,test_y))
+
+xgboostModel.save_model('best_model.json')

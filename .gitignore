@@ -3,6 +3,7 @@
 *.mp4
 *.npy
 *.npz
+*.csv
 __pycache__
 obs/shao_ATdays_2020_2020_*.txt*
 vvm

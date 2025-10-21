@@ -50,10 +50,16 @@ def read_imerg_daily(nowdate, lonb=None, latb=None,cores=5):
     sdate         = datetime(nowdate.year, nowdate.month, nowdate.day)
     datelist      = [ sdate + timedelta(minutes=30)*i \
                       for i in range(48) ]
-    with multiprocessing.Pool(processes=cores) as pool:
-        dum = pool.starmap(read_imerg, \
-                      [(datelist[i], lonb, latb) for i in range(len(datelist))]\
-                      )
+    if cores>1:
+        with multiprocessing.Pool(processes=cores) as pool:
+            dum = pool.starmap(read_imerg, \
+                          [(datelist[i], lonb, latb) for i in range(len(datelist))]\
+                          )
+    else:
+       dum = []
+       for d in datelist:
+           fout = read_imerg(d, lonb, latb)
+           dum.append(fout)
     results   = np.squeeze(np.array([a[2] for a in dum]))
     data      = np.nanmean(results,axis=0)
     return lon, lat, data
@@ -86,6 +92,20 @@ def read_imerg(nowtime, lonb=None, latb=None):
     data = rain.copy()
     if lonb and latb:
         lon, lat, data = crop_data(lonb, latb, lon, lat, rain, zaxis=0)
+    return lon, lat, data
+    
+def read_imerg_from_dailydata(nowtime,lonb=None,latb=None):
+    yyyy   = nowtime.year
+    mm     = nowtime.month
+    it     = int((nowtime-datetime(yyyy,mm,1)).total_seconds()/86400)
+    imdir=f'/data/C.shaoyu/ats/data/imerg/day/{yyyy:04d}'
+    nc  = Dataset(f'{imdir}/IMERG_EA_{yyyy:04d}{mm:02d}_day.nc','r')
+    lon = nc.variables['lon'][:]
+    lat = nc.variables['lat'][:]
+    data = nc.variables['rain'][it,:,:]
+    nc.close()
+    if lonb and latb:
+        lon, lat, data = crop_data(lonb, latb, lon, lat, data, zaxis=0)
     return lon, lat, data
     
 
@@ -180,12 +200,18 @@ def read_era5_2d(varname, nowtime,lonb=None,latb=None):
     yyyy   = nowtime.year
     mm     = nowtime.month
     nctype = 'SFC'
-    it     = int((nowtime-datetime(yyyy,mm,1)).total_seconds()/86400)
-    era5_dir = f'/data/dadm1/reanalysis/ERA5/{nctype}/day/{varname}/{yyyy:04d}'
-    nc  = Dataset(f'{era5_dir}/ERA5_{nctype}_{varname}_{yyyy:04d}{mm:02d}_r1440x721_day.nc','r')
+    if varname=='suf_geo':
+        nc  = Dataset(f'/data/C.shaoyu/data/era5/invariant/era5_surface_geopotential.nc','r')
+        vname = 'z'
+        it = 0
+    else:
+        it     = int((nowtime-datetime(yyyy,mm,1)).total_seconds()/86400)
+        era5_dir = f'/data/dadm1/reanalysis/ERA5/{nctype}/day/{varname}/{yyyy:04d}'
+        nc  = Dataset(f'{era5_dir}/ERA5_{nctype}_{varname}_{yyyy:04d}{mm:02d}_r1440x721_day.nc','r')
+        vname    = varname
     lon = nc.variables['longitude'][:]
     lat = nc.variables['latitude'][::-1]
-    data = nc.variables[varname][it,::-1,:]
+    data = nc.variables[vname][it,::-1,:]
     nc.close()
     if lonb and latb:
         lon, lat, data = crop_data(lonb, latb, lon, lat, data, zaxis=0)

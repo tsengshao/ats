@@ -13,7 +13,7 @@ def merged_csv(yr0, yr1, fname_fmt):
     merged_df = merged_df.set_index('time')
     return merged_df
 
-yr0=2019
+yr0=2001
 yr1=2020
 table_flag = f'{yr0}_{yr1}'
 
@@ -23,13 +23,23 @@ df_feature = merged_csv(yr0, yr1, fname_fmt)
 fname_fmt  = '../synoptic/csv/weather_{iyr}.csv'
 df_weather = merged_csv(yr0, yr1, fname_fmt)
 
+
+## create output DataFrame
 mask = (df_weather['wtype'] == 'other') & (df_weather['diurnal_rain'])
 df_Y = pd.DataFrame({
     'Y_flag': np.where(mask, 1, 0)
 }, index=df_weather.index)
 
-df_feature.to_csv(f'input_{table_flag}.csv')
-df_Y.to_csv(f'output_{table_flag}.csv')
+## create weather type only DF
+df_we = pd.DataFrame({
+    'wtype': df_weather['wtype'],
+    'diurnal_rain': np.where(df_weather['diurnal_rain'],1,0),
+}, index=df_weather.index)
+
+## save DataFrame
+#df_feature.to_csv(f'input_{table_flag}.csv')
+#df_Y.to_csv(f'output_{table_flag}.csv')
+df_we.to_csv(f'weather_{table_flag}.csv')
 
 
 

@@ -138,7 +138,9 @@ def draw_ivt_and_local_rain(nowtime, only_output_flag=False):
               'tc_ivt_max':tc_ivt_max,
               'tc_ivt_zeta_max':tc_ivt_zeta_max,
              }
-    if only_output_flag: return output
+    if only_output_flag:
+        print(nowtime)
+        return output
 
     #rain_bounds = np.array([1, 3, 5, 7, 10, 15, 20, 30, 35])
     rain_bounds = [1, 2, 5, 10, 15, 20, 30, 50, 100]
@@ -269,29 +271,35 @@ if __name__=='__main__':
     # ndays = 30
     # datelist += [ [initime + timedelta(days=iday) ] for iday in range(ndays) ]
 
-    datelist = []
-    #initime = datetime(2007,6,16)
-    initime = datetime(2009,9,26)
-    ndays = 1
-    datelist += [ [initime + timedelta(days=iday) ] for iday in range(ndays) ]
-    datelist = [[t[0], False] for t in datelist]
-
-    ## ####### DRAW #######
     ## datelist = []
-    ## ndays = 30+31+31+30
-    ## y0=2001
-    ## y1=2020
-    ## for yr in range(y0,y1+1):
-    ## #for yr in range(2001,2021):
-    ##     initime = datetime(yr,6,1)
-    ##     datelist += [ [initime + timedelta(days=iday) ] for iday in range(ndays) ]
-    ## #datelist = [[t[0], False] for t in datelist]
+    ## #initime = datetime(2007,6,16)
+    ## initime = datetime(2009,9,26)
+    ## ndays = 1
+    ## datelist += [ [initime + timedelta(days=iday) ] for iday in range(ndays) ]
+    ## datelist = [[t[0], False] for t in datelist]
 
-    cores = 20
-    # Use multiprocessing to fetch variable data in parallel
-    with multiprocessing.Pool(processes=cores) as pool:
-        results = pool.starmap(draw_ivt_and_local_rain,
-            datelist)
-    # df = pd.DataFrame(results).set_index('time')
-    # df.to_csv(f'./csv/weather_{y0}.csv')
+    ## cores = 20
+    ## # Use multiprocessing to fetch variable data in parallel
+    ## with multiprocessing.Pool(processes=cores) as pool:
+    ##     results = pool.starmap(draw_ivt_and_local_rain,
+    ##         datelist)
+   
+
+    ####### WRITE output #######
+    datelist = []
+    ndays = 30+31+31+30
+    y0=2001
+    y1=2020
+    for yr in range(y0,y1+1):
+    #for yr in range(2001,2021):
+        initime = datetime(yr,6,1)
+        datelist = [ [initime + timedelta(days=iday), True ] for iday in range(ndays) ]
+
+        cores = 20
+        # Use multiprocessing to fetch variable data in parallel
+        with multiprocessing.Pool(processes=cores) as pool:
+            results = pool.starmap(draw_ivt_and_local_rain,
+                datelist)
+        df = pd.DataFrame(results).set_index('time')
+        df.to_csv(f'./csv/weather_{yr}.csv')
    

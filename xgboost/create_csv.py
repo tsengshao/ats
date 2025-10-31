@@ -37,8 +37,8 @@ df_we = pd.DataFrame({
 }, index=df_weather.index)
 
 ## save DataFrame
-#df_feature.to_csv(f'input_{table_flag}.csv')
-#df_Y.to_csv(f'output_{table_flag}.csv')
+df_feature.to_csv(f'input_{table_flag}.csv')
+df_Y.to_csv(f'output_{table_flag}.csv')
 df_we.to_csv(f'weather_{table_flag}.csv')
 
 

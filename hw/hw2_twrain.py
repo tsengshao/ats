@@ -326,7 +326,10 @@ if __name__=='__main__':
     datelist = [[t[0], False] for t in datelist]
 
     datelist = [\
-                [datetime(2018, 6,24)],
+                [datetime(2010, 8,  2)],
+                [datetime(2010, 9, 12)],
+                [datetime(2015, 6, 18)],
+                [datetime(2015, 7, 27)],
                ]
 
     ## ####### DRAW #######

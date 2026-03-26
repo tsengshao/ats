@@ -630,6 +630,7 @@ if __name__=="__main__":
     #p, T, q, u, v = np.loadtxt("prof_20180906_at030.txt", usecols=range(5), unpack=True, skiprows=1)
     sw_ivt_lonlat = [115.,119.,20.,22]
     nowtime = datetime(2018,6,24)
+    nowtime = datetime(2010, 7, 19)
     lonp=119
     latp=22
     lon_e, lat_e, p, T, q, u, v = read_era(nowtime,lonp,latp)
@@ -666,7 +667,7 @@ if __name__=="__main__":
         the, thes, parcel_thes,
         #CAPE, CIN, LCL, LFC, EL,
         CAPE_tv, CIN_tv, LCL, LFC, EL,
-        title=f'ERA5, {datestr}, ({lonp}N,{latp}E)',
+        title=f'ERA5, {datestr}, ({lonp}E,{latp}N)',
         savepath=f"./fig/hw2_skewt_{datestr}.png",
         show=True
     )

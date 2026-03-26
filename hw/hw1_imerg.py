@@ -113,7 +113,8 @@ if __name__=='__main__':
     ## datelist = [[datetime(2001,6,28)], [datetime(2001,6,4)]]
 
     datelist = [\
-                [datetime(2018, 6,24)],
+                [datetime(2018, 6, 24)],
+                [datetime(2010, 7, 19)],
                ]
 
     cores = 1

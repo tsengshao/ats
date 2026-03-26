@@ -1,0 +1,33 @@
+    dset /data/dadm1/model_output/CMIP6/TaiESM1/historical/atmos/day/r1i1p1f1/pr_day_TaiESM1_historical_r1i1p1f1_gn_%ch.nc
+    options template 365_day_calendar
+   DTYPE netcdf
+chsub       1     3651 18500101-18591231
+chsub    3652    10952 18600101-18691231
+chsub   10953    21903 18700101-18791231
+chsub   21904    36504 18800101-18891231
+chsub   36505    54755 18900101-18991231
+chsub   54756    76656 19000101-19091231
+chsub   76657   102207 19100101-19191231
+chsub  102208   131408 19200101-19291231
+chsub  131409   164259 19300101-19391231
+chsub  164260   200760 19400101-19491231
+chsub  200761   240911 19500101-19591231
+chsub  240912   284712 19600101-19691231
+chsub  284713   332163 19700101-19791231
+chsub  332164   383264 19800101-19891231
+chsub  383265   438015 19900101-19991231
+chsub  438016   496416 20000101-20091231
+chsub  496417   498241 20100101-20141231
+   TDEF 498241 linear 01jan1850 1dy
+   XDEF 288 linear 0 1.25
+   YDEF 192 linear -90 0.9424084
+   ZDEF 1   levels 1000
+   UNDEF 1.e+20
+   VARS 1 
+   pr=>pr 0 t,y,x pr
+   ENDVARS
+
+
+
+
+! /data/dadm1/model_output/CMIP6/TaiESM1/historical/atmos/day/r1i1p1f1/pr_day_TaiESM1_historical_r1i1p1f1_gn_20100101-20141231.nc

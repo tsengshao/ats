@@ -45,14 +45,15 @@ if __name__=='__main__':
     varlist = ['hus',  'qall', 'ta', 'ua', 'va', 'zg', 'wa', 'hur']
     varlist = ['hus',  'ua', 'va', 'zg',]
 
-    fname   = f'/large/sftpgo/data/ICON/d3hp003.zarr/{grid}_z9_atm'
-    out_dir = f'/work/shaoyu/GSRMs/prepare//data/icon/{grid}_large/'
+    fname   = f'/large/sftpgo/data/DYAMOND3/ICON/d3hp003.zarr/{grid}_z9_atm'
+    #out_dir = f'/work/shaoyu/GSRMs/prepare/data/icon_EA/{grid}/'
+    out_dir = f'../../data/prepare/icon_EA/{grid}/'
     NSIDE   = 512  # corresponding to z9
     os.system(f'mkdir -p {out_dir}')
 
     #lon = 110. + np.arange(251) * 0.1
-    lon = 105. + np.arange(351) * 0.1
-    lat = 10.  + np.arange(251) * 0.1
+    lon = 100. + np.arange(401) * 0.1
+    lat = 5.   + np.arange(401) * 0.1
 
     ds    = xr.open_zarr(fname, consolidated=True)
     print(f'{fname}\nNSIDE={NSIDE}')

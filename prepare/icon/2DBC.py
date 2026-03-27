@@ -42,12 +42,11 @@ def print_healp_resolution(NSIDE):
 
 if __name__=='__main__':
     grid    = 'PT1H_inst'
-    varlist = ['pr']
-    varlist = ['pr', 'uas', 'vas']
+    grid_out    = '2DBC'
+    varlist = ['orog', 'sftlf']
 
     fname   = f'/large/sftpgo/data/DYAMOND3/ICON/d3hp003.zarr/{grid}_z9_atm'
-    #out_dir = f'/work/shaoyu/GSRMs/prepare/data/icon_EA/{grid}/'
-    out_dir = f'../../data/prepare/icon_EA/{grid}/'
+    out_dir = f'../../data/prepare/icon_EA/{grid_out}/'
     NSIDE   = 512  # corresponding to z9
     os.system(f'mkdir -p {out_dir}')
 
@@ -59,18 +58,19 @@ if __name__=='__main__':
     approx_res = print_healp_resolution(NSIDE)
     latlon_shape = (lat.size, lon.size)
 
-    ti = ds.time
-    idxt0 = np.argmin(np.abs(ti-np.datetime64('2020-06-01T00:00')).values)
-    idxt1 = np.argmin(np.abs(ti-np.datetime64('2020-10-01T00:00')).values)+1
-    print(ds.time.isel(time=slice(idxt0, idxt1)))
-    print(f'CDO:  -seltimestep,{idxt0+1}/{idxt1-1}')
+    # ti = ds.time
+    # idxt0 = np.argmin(np.abs(ti-np.datetime64('2020-06-01T00:00')).values)
+    # idxt1 = np.argmin(np.abs(ti-np.datetime64('2020-10-01T00:00')).values)+1
+    # print(ds.time.isel(time=slice(idxt0, idxt1)))
+    # print(f'CDO:  -seltimestep,{idxt0+1}/{idxt1-1}')
 
     for var in varlist:
+        print(var)
         grid = get_nn_lon_lat_index(NSIDE,lon,lat)
-        data = ds[var].isel(time=slice(idxt0,idxt1), cell=grid)
+        data = ds[var].isel(cell=grid)
         data = clean_attrs(data)
 
-        comp = dict(zlib=True, complevel=4, chunksizes=(1,lat.size, lon.size))  # compression level: 1 (fastest) to 9 (best)
+        comp = dict(zlib=True, complevel=4, chunksizes=(lat.size, lon.size))  # compression level: 1 (fastest) to 9 (best)
         encoding = {data.name: comp}
         data.to_netcdf(f'{out_dir}/{var}.nc', format='NETCDF4', encoding=encoding)
 

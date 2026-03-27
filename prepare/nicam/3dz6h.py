@@ -58,13 +58,13 @@ if __name__=='__main__':
     ## wa	velocity w
 
 
-    fname   = f'/large/sftpgo/data/NICAM/hackathon/healpix/NICAM_{grid}_z9.zarr'
-    out_dir = f'/work/shaoyu/GSRMs/prepare//data/nicam/{grid}_large/'
+    fname   = f'/large/sftpgo/data/DYAMOND3/NICAM/hackathon/healpix/NICAM_{grid}_z9.zarr'
+    #out_dir = f'/work/shaoyu/GSRMs/prepare/data/nicam_EA/{grid}/'
+    out_dir = f'../../data/prepare/data/nicam_EA/{grid}/'
     os.system(f'mkdir -p {out_dir}')
 
-    lon = 110. + np.arange(251) * 0.1
-    lon = 105. + np.arange(351) * 0.1
-    lat = 10.  + np.arange(251) * 0.1
+    lon = 100. + np.arange(401) * 0.1
+    lat = 5.  + np.arange(401) * 0.1
 
     ds    = xr.open_zarr(fname, consolidated=True)
     NSIDE   = 512  # corresponding to z9
@@ -74,7 +74,7 @@ if __name__=='__main__':
 
     ti = ds.time
     idxt0 = np.argmin(np.abs(ti-np.datetime64('2020-06-01T00:00')).values)
-    idxt1 = np.argmin(np.abs(ti-np.datetime64('2021-03-01T00:00')).values)+1
+    idxt1 = np.argmin(np.abs(ti-np.datetime64('2020-10-01T00:00')).values)+1
     print(ds.time.isel(time=slice(idxt0, idxt1)))
     print(f'CDO:  -seltimestep,{idxt0+1}/{idxt1-1}')
 

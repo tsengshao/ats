@@ -44,13 +44,14 @@ if __name__=='__main__':
     grid    = '2dbc'
     varlist = ['orog', 'sftlf']
 
-    fname   = f'/large/sftpgo/data/NICAM/hackathon/healpix/NICAM_{grid}_z9.zarr'
-    out_dir = f'/work/shaoyu/GSRMs/prepare/data/nicam/{grid}/'
+    fname   = f'/large/sftpgo/data/DYAMOND3/NICAM/hackathon/healpix/NICAM_{grid}_z9.zarr'
+    #out_dir = f'/work/shaoyu/GSRMs/prepare/data/nicam_EA/{grid}/'
+    out_dir = f'../../data/prepare/data/nicam_EA/{grid}/'
     NSIDE   = 512  # corresponding to z9
     os.system(f'mkdir -p {out_dir}')
 
-    lon = 110. + np.arange(251) * 0.1
-    lat = 10.  + np.arange(251) * 0.1
+    lon = 100. + np.arange(401) * 0.1
+    lat = 5.   + np.arange(401) * 0.1
 
     ds    = xr.open_zarr(fname, consolidated=True)
     print(f'{fname}\nNSIDE={NSIDE}')

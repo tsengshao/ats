@@ -44,6 +44,7 @@ if __name__=='__main__':
     grid    = 'PT1H_inst'
     grid_out    = '2DBC'
     varlist = ['orog', 'sftlf']
+    output_time = np.datetime64('1970-01-01T00:00:00')
 
     fname   = f'/large/sftpgo/data/DYAMOND3/ICON/d3hp003.zarr/{grid}_z9_atm'
     out_dir = f'../../data/prepare/icon_EA/{grid_out}/'
@@ -68,9 +69,11 @@ if __name__=='__main__':
         print(var)
         grid = get_nn_lon_lat_index(NSIDE,lon,lat)
         data = ds[var].isel(cell=grid)
+        data = data.expand_dims(time=[output_time])
+        data.coords['time'].attrs['standard_name'] = 'time'
         data = clean_attrs(data)
 
-        comp = dict(zlib=True, complevel=4, chunksizes=(lat.size, lon.size))  # compression level: 1 (fastest) to 9 (best)
+        comp = dict(zlib=True, complevel=4, chunksizes=(1, lat.size, lon.size))  # compression level: 1 (fastest) to 9 (best)
         encoding = {data.name: comp}
         data.to_netcdf(f'{out_dir}/{var}.nc', format='NETCDF4', encoding=encoding)
 

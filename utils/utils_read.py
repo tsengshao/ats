@@ -1,5 +1,5 @@
 import numpy as np
-import sys, os
+import sys, os, pathlib
 from netCDF4 import Dataset
 sys.path.insert(0,'../utils')
 from datetime import datetime, timedelta
@@ -139,10 +139,16 @@ def read_gsrm(model,varname,nowtime,lonb=None,latb=None,levb=None, daily=False,t
         grid_dict = {'icon':'PT6H_inst', 'nicam':'3d6h'}
         dtype = '3d'
     elif varname in ['orog', 'sftlf']:
-        grid_dict = {'nicam':'2dbc'}
+        grid_dict = {'nicam':'2dbc', 'icon':'2DBC'}
         dtype = '2d'
     grid = grid_dict[mname]
-    fname=f'/data/C.shaoyu/hackathon/{mname}/{grid}/{vname}.nc'
+
+    _THIS_FILE = pathlib.Path(__file__).resolve()
+    _PROJECT_ROOT = _THIS_FILE.parent.parent
+    _PREPARE_DIR = _PROJECT_ROOT / "data" / "prepare"
+    #fname=f'/data/C.shaoyu/hackathon/{mname}/{grid}/{vname}.nc'
+    #fname=f'/home/shaoyu/shaoyu/GSRMs/prepare/data/{mname}_EA/{grid}/{vname}.nc'
+    fname=f'{_PREPARE_DIR}/{mname}_EA/{grid}/{vname}.nc'
     ds = xr.open_dataset(fname)
 
     # process time position 
@@ -152,12 +158,14 @@ def read_gsrm(model,varname,nowtime,lonb=None,latb=None,levb=None, daily=False,t
         datatime = nowtime+timedelta(minutes=90)
     else:
         datatime = nowtime
+
     if tw_time: datatime = datatime-timedelta(hours=8)
     tstr=datatime.strftime('%Y-%m-%dT%H:%M:%S')
     if daily: tstr = tstr[:10]
 
     # if topography, only on time 
-    if grid=='2dbc': tstr='1970-01-01T00:00:00'
+    if varname in ['orog', 'sftlf']:
+       tstr='1970-01-01T00:00:00'
 
     if daily and tw_time:
        d1 = datatime - timedelta(hours=8)

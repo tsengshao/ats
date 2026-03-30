@@ -7,21 +7,30 @@ import matplotlib as mpl
 mpl.use('agg')
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 from matplotlib.patches import Rectangle
-from scipy.ndimage import gaussian_filter
 
 sys.path.insert(0, '..')
 import utils.utils_draw as udraw
 import utils.utils_plot_cartopy as ucartopy
 import utils.utils_read as uread
+from ivt_gsrm_common import (
+    lonb,
+    latb,
+    levb,
+    tw_lonb,
+    tw_latb,
+    SW_IVT_LONLAT,
+    TC_IVT_LONLAT,
+    get_ivt_values,
+    get_tw_hourly_rain,
+)
 
 
-lonb = [105.0, 137.0]
-latb = [12.0, 37.0]
-levb = [1000.0, 700.0]
-
-tw_lonb = [119.5, 122.5]
-tw_latb = [21.5, 26.0]
+# lonb = [105.0, 137.0]
+# latb = [12.0, 37.0]
+# levb = [1000.0, 700.0]
+# 
 tw_land_lonb = [120.0, 122.0]
 tw_land_latb = [21.5, 25.4]
 
@@ -32,22 +41,23 @@ QUIVER_SKIP = {
     'nicam': 6,
     'icon': 6,
 }
-SW_IVT_LONLAT = [115.0, 119.0, 20.0, 22.0]
-TC_IVT_LONLAT = [115.0, 130.0, 17.0, 32.0]
+# SW_IVT_LONLAT = [115.0, 119.0, 20.0, 22.0]
+# TC_IVT_LONLAT = [115.0, 130.0, 17.0, 32.0]
+# TC_IVT_LONLAT = [115.0, 127.5, 17.0, 29.5] 
 
-_TW_MASK_CACHE = None
+_WEATHER_LABEL_CACHE = {}
 MAX_PROCESSES = 10
 
 
 def get_ivt(model, nowtime, lev_lowb=levb):
     lon_gs, lat_gs, lev_gs, u_gs = uread.read_gsrm(
-        model, 'ua', nowtime, lonb, latb, lev_lowb, daily=True, tw_time=True
+        model, 'ua', nowtime, lonb, latb, lev_lowb, daily=True, tw_time=False
     )
     lon_gs, lat_gs, lev_gs, v_gs = uread.read_gsrm(
-        model, 'va', nowtime, lonb, latb, lev_lowb, daily=True, tw_time=True
+        model, 'va', nowtime, lonb, latb, lev_lowb, daily=True, tw_time=False
     )
     lon_gs, lat_gs, lev_gs, q_gs = uread.read_gsrm(
-        model, 'hus', nowtime, lonb, latb, lev_lowb, daily=True, tw_time=True
+        model, 'hus', nowtime, lonb, latb, lev_lowb, daily=True, tw_time=False
     )
 
     u_gs = np.nan_to_num(u_gs, nan=0.0)
@@ -64,50 +74,33 @@ def get_ivt(model, nowtime, lev_lowb=levb):
     return lon_gs, lat_gs, ivt_x, ivt_y, ivt_zeta
 
 
-def get_ivt_values(lon, lat, ivt, ivt_z, lonlat):
-    ix0 = np.argmin(np.abs(lon - lonlat[0]))
-    ix1 = np.argmin(np.abs(lon - lonlat[1])) + 1
-    iy0 = np.argmin(np.abs(lat - lonlat[2]))
-    iy1 = np.argmin(np.abs(lat - lonlat[3])) + 1
+def load_weather_label(model, nowtime):
+    global _WEATHER_LABEL_CACHE
 
-    data = ivt[iy0:iy1, ix0:ix1]
-    data_z = gaussian_filter(ivt_z, sigma=4)
-    data_z = data_z[iy0:iy1, ix0:ix1]
-    return np.nanmin(data), np.nanpercentile(data, 95), np.nanmean(data), np.nanmax(data_z)
+    cache_key = (model, nowtime.year)
+    if cache_key not in _WEATHER_LABEL_CACHE:
+        csvfile = f'./csv/{model}_{nowtime.year}.csv'
+        if not os.path.exists(csvfile):
+            _WEATHER_LABEL_CACHE[cache_key] = None
+        else:
+            _WEATHER_LABEL_CACHE[cache_key] = pd.read_csv(csvfile)
 
+    df = _WEATHER_LABEL_CACHE[cache_key]
+    if df is None:
+        return 'unknown', '0'
 
-def get_tw_mask(model):
-    global _TW_MASK_CACHE
-    if _TW_MASK_CACHE is not None:
-        return _TW_MASK_CACHE
+    idx = df['time'] == nowtime.strftime('%Y-%m-%d')
+    if not idx.any():
+        return 'unknown', '0'
 
-    lon_mask, lat_mask, landfrac = uread.read_gsrm(
-        model, 'sftlf', datetime(1970, 1, 1), tw_lonb, tw_latb
-    )
-    lon2d, lat2d = np.meshgrid(lon_mask, lat_mask)
-    mask = (
-        (tw_land_lonb[0] <= lon2d)
-        * (lon2d <= tw_land_lonb[1])
-        * (tw_land_latb[0] <= lat2d)
-        * (lat2d <= tw_land_latb[1])
-        * (landfrac > 0.2)
-    )
-    _TW_MASK_CACHE = (lon_mask, lat_mask, mask.astype(bool))
-    return _TW_MASK_CACHE
-
-
-def get_tw_hourly_rain(model, nowtime):
-    lon_mask, lat_mask, tw_mask = get_tw_mask(model)
-    rain_hourly = []
-    for ihr in range(24):
-        _, _, rain = uread.read_gsrm(
-            model, 'pr', nowtime + timedelta(hours=ihr), tw_lonb, tw_latb, tw_time=True
-        )
-        rain_hourly.append(rain * 3600.0)
-    rain_hourly = np.stack(rain_hourly, axis=0)
-    rain_hourly = np.where(np.isnan(rain_hourly), np.nan, rain_hourly)
-    rain_land = rain_hourly[:, tw_mask].T
-    return lon_mask, lat_mask, tw_mask, rain_hourly, rain_land
+    row = df[idx].iloc[0]
+    wtype = row['wtype']
+    diurnal_value = row['diurnal_rain']
+    if isinstance(diurnal_value, str):
+        diurnal_flag = '1' if diurnal_value.strip().lower() in {'1', 'true', 't'} else '0'
+    else:
+        diurnal_flag = '1' if bool(diurnal_value) else '0'
+    return wtype, diurnal_flag
 
 
 def draw_ivt_gsrm(model, nowtime, only_output_flag=False):
@@ -123,7 +116,7 @@ def draw_ivt_gsrm(model, nowtime, only_output_flag=False):
     )
 
     _, _, _, z_gs = uread.read_gsrm(
-        model, 'zg', nowtime, lonb, latb, [500.0, 500.0], daily=True, tw_time=True
+        model, 'zg', nowtime, lonb, latb, [500.0, 500.0], daily=True, tw_time=False
     )
     lon_pr, lat_pr, pr_gs = uread.read_gsrm(
         model, 'pr', nowtime, lonb, latb, daily=True, tw_time=True
@@ -222,7 +215,7 @@ def draw_ivt_gsrm(model, nowtime, only_output_flag=False):
     topo_vvm_lat = ds_topo_vvm.lat
     topo_vvm_hei = ds_topo_vvm.height
 
-    print('topo_min_max', np.nanmin(topo_height), np.nanmax(topo_height))
+    #print('topo_min_max', np.nanmin(topo_height), np.nanmax(topo_height))
     #topo_height = ds_topo.height * 1e3
     topo = ax1.contourf(
         topo_lon,
@@ -323,7 +316,16 @@ def draw_ivt_gsrm(model, nowtime, only_output_flag=False):
     ax3.set_yticks([0, 1, 2, 3])
     ax3.tick_params(axis='y', left=False, labelleft=False, right=True, labelright=True)
     ax3.axis((5, 24, 0, 2.9))
-    ax3.text(0.02, 0.98, f'mean ({rain_land.shape[0]})', va='top', ha='left', transform=ax3.transAxes)
+    wtype_str, diurnal_flag = load_weather_label(model, nowtime)
+    diurnal_str = 'diurnal' if diurnal_flag == '1' else 'non-diurnal'
+    ax3.text(
+        0.02,
+        0.98,
+        f'mean ({rain_land.shape[0]})\n{diurnal_str}',
+        va='top',
+        ha='left',
+        transform=ax3.transAxes,
+    )
     ax3.grid(True)
 
     plottools.Plot_cartopy_map(ax1)
@@ -334,10 +336,11 @@ def draw_ivt_gsrm(model, nowtime, only_output_flag=False):
         fontweight='bold',
         fontsize=20,
     )
+    ax1.set_title(wtype_str, loc='right', fontweight='bold', fontsize=20)
 
     outdir = f'./fig/{model}/ivt'
     os.makedirs(outdir, exist_ok=True)
-    outfile = f'{outdir}/ivt_{nowtime.strftime("%Y%m%d")}.png'
+    outfile = f'{outdir}/ivt_{nowtime.strftime("%Y%m%d")}_{wtype_str}_{diurnal_flag}.png'
     plt.savefig(outfile, facecolor='w', bbox_inches='tight', dpi=300)
     plt.close(fig)
     print(nowtime, '->', outfile)

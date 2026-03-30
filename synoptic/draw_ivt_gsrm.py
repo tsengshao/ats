@@ -1,5 +1,6 @@
 import os
 import sys
+import multiprocessing
 from datetime import datetime, timedelta
 
 import matplotlib as mpl
@@ -35,6 +36,7 @@ SW_IVT_LONLAT = [115.0, 119.0, 20.0, 22.0]
 TC_IVT_LONLAT = [115.0, 130.0, 17.0, 32.0]
 
 _TW_MASK_CACHE = None
+MAX_PROCESSES = 10
 
 
 def get_ivt(model, nowtime, lev_lowb=levb):
@@ -353,11 +355,15 @@ def main():
     start_time = datetime(2020, 6, 2)
     end_time = datetime(2020, 10, 1)
     ndays = (end_time - start_time).days
-    ndays = 10
 
-    for iday in range(ndays):
-        nowtime = start_time + timedelta(days=iday)
-        draw_ivt_gsrm(model, nowtime)
+    datelist = [
+        (model, start_time + timedelta(days=iday))
+        for iday in range(ndays)
+    ]
+
+    nproc = min(len(datelist), os.cpu_count() or 1, MAX_PROCESSES)
+    with multiprocessing.Pool(processes=nproc) as pool:
+        pool.starmap(draw_ivt_gsrm, datelist)
 
 
 if __name__ == '__main__':

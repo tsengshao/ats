@@ -44,6 +44,7 @@ if __name__=='__main__':
     grid    = 'PT6H_inst'
     varlist = ['hus',  'qall', 'ta', 'ua', 'va', 'zg', 'wa', 'hur']
     varlist = ['hus',  'ua', 'va', 'zg',]
+    varlist = ['ta']
 
     fname   = f'/large/sftpgo/data/DYAMOND3/ICON/d3hp003.zarr/{grid}_z9_atm'
     #out_dir = f'/work/shaoyu/GSRMs/prepare/data/icon_EA/{grid}/'

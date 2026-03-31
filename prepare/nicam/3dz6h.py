@@ -46,6 +46,7 @@ if __name__=='__main__':
     grid    = '3d6h'
     varlist = ['hus',  'qall', 'ta', 'ua', 'va', 'zg', 'wa', 'hur']
     varlist = ['hus',  'ua', 'va', 'zg',]
+    varlist = ['ta']
 
     ## healpix
     ## hur	relative humidity
@@ -60,7 +61,7 @@ if __name__=='__main__':
 
     fname   = f'/large/sftpgo/data/DYAMOND3/NICAM/hackathon/healpix/NICAM_{grid}_z9.zarr'
     #out_dir = f'/work/shaoyu/GSRMs/prepare/data/nicam_EA/{grid}/'
-    out_dir = f'../../data/prepare/data/nicam_EA/{grid}/'
+    out_dir = f'../../data/prepare/nicam_EA/{grid}/'
     os.system(f'mkdir -p {out_dir}')
 
     lon = 100. + np.arange(401) * 0.1

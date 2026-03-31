@@ -480,7 +480,186 @@ def cape_cin_tv_style(T_parcel, qv_parcel, press_parcel,
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
-from matplotlib.ticker import MultipleLocator, ScalarFormatter, NullFormatter
+from matplotlib.ticker import ScalarFormatter, NullFormatter
+
+
+DEFAULT_PLOT_CONFIG = {
+    "layout": "three_panel",
+    "figsize": None,
+    "width_ratios": None,
+    "wind_xlim": (-20.0, 20.0),
+    "additional_text": None,
+    #"wind_arrow_count": 12,
+    #"wind_arrow_x": 0.84,
+    "wind_arrow_scale": 35.0,
+    "wind_arrow_width": 0.010,
+    "wind_key_value": 5.0,
+    "wind_key_label": "5 m/s",
+}
+
+
+def _resolve_plot_config(plot_config):
+    cfg = dict(DEFAULT_PLOT_CONFIG)
+    if plot_config:
+        cfg.update(plot_config)
+
+    layout = cfg["layout"]
+    if layout == "two_panel":
+        cfg["figsize"] = cfg["figsize"] or (11, 6)
+        cfg["width_ratios"] = cfg["width_ratios"] or [2.2, 1.0]
+    elif layout == "three_panel":
+        cfg["figsize"] = cfg["figsize"] or (14, 6)
+        cfg["width_ratios"] = cfg["width_ratios"] or [2.3, 1.0, 1.0]
+    else:
+        raise ValueError(f"Unsupported layout: {layout}")
+    return cfg
+
+
+def _finite_or_nan(value):
+    return np.nan if value is None else float(value)
+
+
+def _setup_pressure_axis(ax, plim, yticks):
+    ax.set_yscale('log')
+    ax.set_ylim(*plim)
+    ax.set_yticks(yticks)
+    ax.yaxis.set_major_formatter(ScalarFormatter())
+    ax.yaxis.set_minor_formatter(NullFormatter())
+
+
+def _choose_wind_arrow_levels(p, count):
+    if len(p) <= count:
+        return np.arange(len(p))
+    idx = np.linspace(0, len(p) - 1, count).round().astype(int)
+    return np.unique(idx)
+
+
+def _pressure_to_axes_y(ax, pressure_value):
+    xy_disp = ax.transData.transform((0.0, pressure_value))
+    xy_axes = ax.transAxes.inverted().transform(xy_disp)
+    return float(xy_axes[1])
+
+
+def _add_wind_profile_arrows(ax_wind, p, u, v, plot_cfg):
+    #x_center = float(plot_cfg["wind_arrow_x"])
+    #arrow_idx = _choose_wind_arrow_levels(np.asarray(p), int(plot_cfg["wind_arrow_count"]))
+    x_center = 0.85
+    arrow_idx = np.arange(len(p), dtype=int)
+    p = np.asarray(p)
+    u = np.asarray(u)
+    v = np.asarray(v)
+    y_axes = np.array([_pressure_to_axes_y(ax_wind, p[idx]) for idx in arrow_idx], dtype=float)
+    #mask = (y_axes >= 0.02) & (y_axes <= 0.98)
+    mask = np.ones(len(y_axes), dtype=bool)
+    if not np.any(mask):
+        return None
+
+    arrow_idx = arrow_idx[mask]
+    y_axes = y_axes[mask]
+
+    quiver_kwargs = dict(
+        pivot='tail',
+        angles='uv',
+        scale_units='width',
+        scale=float(plot_cfg["wind_arrow_scale"]),
+        width=float(plot_cfg["wind_arrow_width"]),
+        headwidth=3.5,
+        headlength=4.5,
+        headaxislength=4.0,
+        color='0.25',
+        transform=ax_wind.transAxes,
+        clip_on=False,
+        zorder=4,
+    )
+
+    q_main = None
+    p_alpha = 300.
+    for pressure_mask, alpha in ((p[arrow_idx] >= p_alpha, None),
+                                 (p[arrow_idx] < p_alpha, 0.5),
+                                ):
+        if not np.any(pressure_mask):
+            continue
+        q = ax_wind.quiver(
+            np.full(np.count_nonzero(pressure_mask), x_center, dtype=float),
+            y_axes[pressure_mask],
+            u[arrow_idx][pressure_mask],
+            v[arrow_idx][pressure_mask],
+            alpha=alpha,
+            **quiver_kwargs,
+        )
+        if q_main is None:
+            q_main = q
+
+    return q_main
+
+
+def _add_skewt_background(ax_skew):
+    Tmin, Tmax, nt = -120.0, 100.0, 221
+    pbot, ptop, npres = 1000.0, 100.0, 200
+    TgC = np.linspace(Tmin, Tmax, nt)
+    Pg = np.linspace(pbot, ptop, npres)
+    TT, PP = np.meshgrid(TgC + 273.15, Pg)
+    TH = cal_potential_temperature(PP, TT)
+    q_sat, _ = cal_qv_rv_saturated(PP, TT)
+    THES = cal_equivalent_potential_temperature(PP, q_sat, TT)
+    ax_skew.contour(TT - 273.15, PP, TH, np.arange(203.15, 430, 10),
+                    colors='sienna', linestyles='--', linewidths=0.8, alpha=0.85, zorder=1)
+    ax_skew.contour(TT - 273.15, PP, THES, np.arange(240, 450, 15),
+                    colors='purple', linestyles='--', linewidths=0.9, alpha=0.75, zorder=1)
+
+    p_rv = np.linspace(1000.0, 600.0, 80)
+    rv_levels_gkg = np.array([0.5, 1.0, 2.0, 4.0, 8.0, 12.0, 24.0])
+    for rv_gkg in rv_levels_gkg:
+        rv_kgkg = rv_gkg / 1000.0
+        e_hPa = rv_kgkg * p_rv / (C.EPS + rv_kgkg)
+        t_rv = np.array([brentq(lambda T: cal_goff_gratch_es_hPa(T) - e, 180.0, 330.0) for e in e_hPa])
+        ax_skew.plot(
+            t_rv - 273.15,
+            p_rv,
+            color='teal',
+            linestyle=':',
+            linewidth=0.8,
+            alpha=0.9,
+            zorder=1,
+        )
+        ax_skew.text(
+            t_rv[-1] - 273.15,
+            p_rv[-1] - 10,
+            f"{rv_gkg:g}",
+            color='teal',
+            fontsize=8,
+            alpha=0.75,
+            ha='center',
+            va='bottom',
+            zorder=1,
+        )
+
+
+def _plot_wind_panel(ax_wind, p, u, v, plot_cfg, plim, yticks, additional_text):
+    ax_wind.plot(u, p, color='tab:blue', lw=2.0, label='u')
+    ax_wind.plot(v, p, color='tab:orange', lw=2.0, label='v')
+    ax_wind.axvline(0.0, color='0.6', lw=1.0)
+    _setup_pressure_axis(ax_wind, plim, yticks)
+    ax_wind.tick_params(axis='y', which='both', labelleft=False)
+    ax_wind.grid(True, which='major', linestyle='--', alpha=0.35)
+    ax_wind.set_xlim(*plot_cfg["wind_xlim"])
+    ax_wind.set_xlabel('Wind [m/s]', fontsize=14)
+    ax_wind.tick_params(axis='both', labelsize=12)
+    ax_wind.legend(loc='lower left', fontsize=10)
+    q = _add_wind_profile_arrows(ax_wind, p, u, v, plot_cfg)
+    if q is not None:
+        ax_wind.quiverkey(
+            q,
+            X=0.125,
+            Y=0.175,
+            U=float(plot_cfg["wind_key_value"]),
+            label=str(plot_cfg["wind_key_label"]),
+            labelpos='S',
+            coordinates='axes',
+            color='0.25',
+        )
+
+
 # ---------- Plot ----------
 def plot_skewt_mse(
     p, T, Td, hei,
@@ -488,119 +667,90 @@ def plot_skewt_mse(
     the, thes, parcel_thes,
     CAPE, CIN, LCL, LFC, EL,
     *,
+    u=None,
+    v=None,
     tlim=(-40, 40),
     plim=(1000, 100),
     title="Skew-T & MSE",
+    plot_config=None,
     show=True,
     savepath=None,
     dpi=300
 ):
     """
-    Plot Skew-T & thetae diagram, with optional file saving.
+    Plot Skew-T with configurable 2-panel or 3-panel layout.
     """
-    import numpy as np
-    import matplotlib.pyplot as plt
-    from matplotlib.gridspec import GridSpec
-    from matplotlib.ticker import MultipleLocator, ScalarFormatter, NullFormatter
-
-    fig = plt.figure(figsize=(11, 6))
+    plot_cfg = _resolve_plot_config(plot_config)
+    layout = plot_cfg["layout"]
+    fig = plt.figure(figsize=plot_cfg["figsize"])
     gs = GridSpec(
-        1, 2, figure=fig,
-        width_ratios=[2.2, 1.0],
-        left=0.10, right=0.96, top=0.92, bottom=0.10, wspace=0.08
+        1, len(plot_cfg["width_ratios"]), figure=fig,
+        width_ratios=plot_cfg["width_ratios"],
+        left=0.08, right=0.96, top=0.92, bottom=0.10, wspace=0.10
     )
 
-    # ---------------- Left: Skew-T ----------------
-    ax_skew = fig.add_subplot(gs[0, 0], projection='skewx')
-    ax_skew.grid(True, which="major", linestyle='--', alpha=0.5)
+    yticks = np.array([100, 200, 300, 400, 500, 600, 700, 800, 900, 1000])
+    axes = {}
 
-    # base profiles
+    ax_skew = fig.add_subplot(gs[0, 0], projection='skewx')
+    axes["skewt"] = ax_skew
+    ax_skew.grid(True, which="major", linestyle='--', alpha=0.5)
     ax_skew.semilogy(T, p, 'r', lw=2.0, label='T')
     ax_skew.semilogy(Td, p, 'g', lw=2.0, label='Td')
     ax_skew.axvline(0, color='b', lw=1.0)
     ax_skew.semilogy(parcel_t - 273.15, parcel_lev, 'k', lw=2.0, label='Parcel')
-  
+
     info_text = (
         f"CAPE: {CAPE:.2f} J/kg\n"
         f"CIN: {CIN:.2f} J/kg\n"
-        f"EL: {EL:.1f} hPa\n"
-        f"LFC: {LFC:.1f} hPa\n"
-        f"LCL: {LCL:.1f} hPa"
+        f"EL: {_finite_or_nan(EL):.1f} hPa\n"
+        f"LFC: {_finite_or_nan(LFC):.1f} hPa\n"
+        f"LCL: {_finite_or_nan(LCL):.1f} hPa"
     )
-    ax_skew.text(0.03, 0.98, info_text,
-                transform=ax_skew.transAxes,
-                fontsize=14, va='top', ha='left',
-                bbox=dict(facecolor='white', alpha=0.8, edgecolor='none'))
+    if plot_cfg.get("additional_text"):
+        info_text = f"{info_text}\n\n{plot_cfg['additional_text']}"
+    ax_skew.text(
+        0.03, 0.98, info_text,
+        transform=ax_skew.transAxes,
+        fontsize=14, va='top', ha='left',
+        bbox=dict(facecolor='white', alpha=0.8, edgecolor='none')
+    )
 
-    yticks = np.array([100,200,300,400,500,600,700,800,900,1000])
-    yticks_hei = np.interp(np.log(yticks[::-1]), np.log(p[::-1]), hei[::-1])
-    yticks_hei = yticks_hei[::-1]/1000.
-
-    ax_skew.set_yticks(yticks)
-    ax_skew.yaxis.set_major_formatter(ScalarFormatter())
-    ax_skew.yaxis.set_minor_formatter(NullFormatter())
-    #ax_skew.set_yticklabels([f'{yticks[i]} ({yticks_hei[i]:.1f})' for i in range(len(yticks))])
-
-    ax_skew.set_xticks(np.arange(-100,41,10))
+    _setup_pressure_axis(ax_skew, plim, yticks)
+    ax_skew.set_xticks(np.arange(-100, 41, 10))
     ax_skew.set_xticklabels(['' if x <= -50 else f'{x}' for x in np.arange(-100, 41, 10)])
-    ax_skew.set_ylim(*plim)
     ax_skew.set_xlim(*tlim)
     ax_skew.set_xlabel('Temperature (degC)', fontsize=16)
     ax_skew.set_ylabel('Pressure [hPa]', fontsize=16)
     ax_skew.tick_params(axis='both', labelsize=14)
     ax_skew.legend(loc='lower left', fontsize=12)
-    
-    # ==== 
+    _add_skewt_background(ax_skew)
 
-    Tmin, Tmax, nt = -120.0, 100.0, 221
-    pbot, ptop, npres = 1000.0, 100.0, 200
-    
-    TgC = np.linspace(Tmin, Tmax, nt)           # x: temperature (degC)
-    Pg  = np.linspace(pbot, ptop, npres)        # y: pressure (hPa)
-    TT, PP = np.meshgrid(TgC + 273.15, Pg)      
-    
-    # 
-    TH = cal_potential_temperature(PP, TT)      
-    
-    q_sat, r_sat = cal_qv_rv_saturated(PP, TT)     
-    THES = cal_equivalent_potential_temperature(PP, q_sat, TT)
-    
-    theta_levels   = np.arange(203.15, 430, 10)
-    thetaes_levels = np.arange(240, 450, 15)
-    
-    # Dry adiabats
-    cs_th = ax_skew.contour(TT - 273.15, PP, TH, theta_levels,
-                       colors='sienna', linestyles='--', linewidths=0.8, alpha=0.85, zorder=1)
-    #ax_skew.clabel(cs_th, fmt=lambda v: f"{int(v)}", fontsize=7, inline=True)
-    
-    # Moist adiabats
-    cs_thes = ax_skew.contour(TT - 273.15, PP, THES, thetaes_levels,
-                         colors='purple', linestyles='--', linewidths=0.9, alpha=0.75, zorder=1)
-    #ax_skew.clabel(cs_thes, fmt=lambda v: f"{int(v)}", fontsize=7, inline=T        
-
-    # ---------------- Right: thetae / thetaes ----------------
     ax_mse = fig.add_subplot(gs[0, 1], aspect='auto')
+    axes["thetae"] = ax_mse
     ax_mse.plot(the, p, 'tab:blue', lw=2.0, label=r'$\theta_e$')
     ax_mse.plot(thes, p, 'tab:red', lw=2.0, label=r'$\theta_{es}$')
     ax_mse.plot(parcel_thes, parcel_lev, 'k', lw=2.0, label=r'Parcel $\theta_{es}$')
-    ax_mse.set_yscale('log')
-    ax_mse.set_ylim(*plim)
-    ax_mse.set_yticks([100,200,300,400,500,600,700,800,900,1000])
-    ax_mse.set_xticks(np.arange(300,401,10))
-    ax_mse.set_xticklabels(['' if x%20 != 0 else f'{x}' for x in np.arange(300, 401, 10)])
-    ax_mse.yaxis.set_major_formatter(ScalarFormatter())
-    ax_mse.yaxis.set_minor_formatter(NullFormatter())
+    _setup_pressure_axis(ax_mse, plim, yticks)
+    ax_mse.set_xticks(np.arange(300, 401, 10))
+    ax_mse.set_xticklabels(['' if x % 20 != 0 else f'{x}' for x in np.arange(300, 401, 10)])
     ax_mse.tick_params(axis='y', which='both', labelleft=False)
     ax_mse.set_xlim(320, 390)
     ax_mse.grid(True, which='major', linestyle='--', alpha=0.5)
     ax_mse.grid(True, which='minor', linestyle='--', alpha=0.2)
     ax_mse.set_xlabel(r'$\theta_e$ & $\theta_{es}$ [K]', fontsize=16)
     ax_mse.tick_params(axis='both', labelsize=14)
-    ax_mse.legend(loc='lower right', fontsize=12)
+    ax_mse.legend(loc='upper left', fontsize=12)
+
+    if layout == "three_panel":
+        if u is None or v is None:
+            raise ValueError("u and v are required for three_panel layout.")
+        ax_wind = fig.add_subplot(gs[0, 2], aspect='auto')
+        axes["wind"] = ax_wind
+        _plot_wind_panel(ax_wind, p, u, v, plot_cfg, plim, yticks, plot_cfg.get("additional_text"))
 
     fig.suptitle(title, fontsize=16)
 
-    # ---------------- Save & Show ----------------
     if savepath:
         fig.savefig(savepath, dpi=dpi, bbox_inches='tight')
         print(f"Figure saved to {savepath}")
@@ -608,7 +758,7 @@ def plot_skewt_mse(
     if show:
         plt.show()
 
-    return fig, (ax_skew, ax_mse)
+    return fig, axes
 
 
 if __name__=="__main__":
@@ -647,6 +797,7 @@ if __name__=="__main__":
         the, thes, parcel_thes,
         #CAPE, CIN, LCL, LFC, EL,
         CAPE_tv, CIN_tv, LCL, LFC, EL,
+        u=u, v=v,
         savepath="skewt_case1.png",
-        show=True
+        show=False,
     )

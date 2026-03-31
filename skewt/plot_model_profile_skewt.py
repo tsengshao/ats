@@ -1,12 +1,10 @@
+#!/home/shaoyu/miniforge3/envs/easy/bin/python
 from __future__ import annotations
 
-import argparse
 import os
 import pathlib
 import sys
 from datetime import datetime
-
-import numpy as np
 
 THIS_DIR = pathlib.Path(__file__).resolve().parent
 PARENT_DIR = THIS_DIR.parent
@@ -16,11 +14,16 @@ if str(PARENT_DIR) not in sys.path:
 os.environ.setdefault("MPLCONFIGDIR", "/tmp")
 os.environ.setdefault("XDG_CACHE_HOME", "/tmp")
 
+import numpy as np
+
 import skewt
 from utils import utils_read as uread
 
 
-def parse_time(time_str: str) -> datetime:
+def parse_time(value: str | datetime) -> datetime:
+    if isinstance(value, datetime):
+        return value
+
     formats = (
         "%Y%m%d",
         "%Y%m%d%H",
@@ -33,10 +36,10 @@ def parse_time(time_str: str) -> datetime:
     )
     for fmt in formats:
         try:
-            return datetime.strptime(time_str, fmt)
+            return datetime.strptime(value, fmt)
         except ValueError:
             pass
-    raise ValueError(f"Unsupported time format: {time_str}")
+    raise ValueError(f"Unsupported time format: {value}")
 
 
 def wrap_lon(lon: float) -> float:
@@ -44,24 +47,27 @@ def wrap_lon(lon: float) -> float:
 
 
 def lon_diff(lon: np.ndarray, target_lon: float) -> np.ndarray:
-    return np.abs((lon - target_lon + 180.0) % 360.0 - 180.0)
+    return np.abs((np.asarray(lon) - target_lon + 180.0) % 360.0 - 180.0)
 
 
-def nearest_xy(lon: np.ndarray, lat: np.ndarray, target_lon: float, target_lat: float) -> tuple[int, int]:
-    lon = np.asarray(lon)
-    lat = np.asarray(lat)
-    target_lon = wrap_lon(target_lon)
+def coord_token(value: float, positive: str, negative: str, scale: int = 1000) -> str:
+    sign = positive if value >= 0.0 else negative
+    magnitude = int(round(abs(value) * scale))
+    return f"{sign}{magnitude:06d}"
 
-    if lon.ndim != 1 or lat.ndim != 1:
-        raise ValueError("Expected 1-D lon/lat arrays.")
 
-    ilon = int(np.argmin(lon_diff(lon, target_lon)))
-    ilat = int(np.argmin(np.abs(lat - target_lat)))
-    return ilat, ilon
+def mean_lon_deg(lon_values: np.ndarray) -> float:
+    lon_rad = np.deg2rad(np.asarray(lon_values))
+    mean_angle = np.arctan2(np.mean(np.sin(lon_rad)), np.mean(np.cos(lon_rad)))
+    return np.rad2deg(mean_angle) % 360.0
+
+
+def finite_or_nan(value: float | None) -> float:
+    return np.nan if value is None else float(value)
 
 
 def sort_profile(p: np.ndarray, *fields: np.ndarray) -> tuple[np.ndarray, ...]:
-    order = np.argsort(p)[::-1]
+    order = np.argsort(np.asarray(p))[::-1]
     out = [np.asarray(p)[order]]
     for field in fields:
         out.append(np.asarray(field)[order])
@@ -71,68 +77,152 @@ def sort_profile(p: np.ndarray, *fields: np.ndarray) -> tuple[np.ndarray, ...]:
 def valid_profile_mask(*fields: np.ndarray) -> np.ndarray:
     mask = np.ones_like(np.asarray(fields[0]), dtype=bool)
     for field in fields:
-        arr = np.asarray(field)
-        mask &= np.isfinite(arr)
+        mask &= np.isfinite(np.asarray(field))
     return mask
 
 
-def read_era5_profile(nowtime: datetime, lon: float, lat: float, levb: tuple[float, float]) -> dict:
-    lon_arr, lat_arr, lev, q = uread.read_era5_3d("q", nowtime, levb=levb)
-    _, _, _, t = uread.read_era5_3d("t", nowtime, levb=levb)
-    _, _, _, u = uread.read_era5_3d("u", nowtime, levb=levb)
-    _, _, _, v = uread.read_era5_3d("v", nowtime, levb=levb)
-    _, _, _, z = uread.read_era5_3d("z", nowtime, levb=levb)
+def get_selector(case: dict) -> dict:
+    selector = dict(case.get("selector", {"method": "nearest"}))
+    method = selector.get("method", "nearest")
+    if method not in {"nearest", "box_mean"}:
+        raise ValueError(f"Unsupported selector method: {method}")
+    if method == "box_mean":
+        selector.setdefault("lon_half_width", 0.5)
+        selector.setdefault("lat_half_width", 0.5)
+    return selector
 
-    ilat, ilon = nearest_xy(lon_arr, lat_arr, lon, lat)
-    profile = {
-        "p": lev,
-        "t": t[:, ilat, ilon],
-        "q": q[:, ilat, ilon],
-        "u": u[:, ilat, ilon],
-        "v": v[:, ilat, ilon],
-        "z": z[:, ilat, ilon] / skewt.C.G,
-        "lon": float(lon_arr[ilon]),
-        "lat": float(lat_arr[ilat]),
-        "source_label": "ERA5",
+
+def build_selection(lon: np.ndarray, lat: np.ndarray, target_lon: float, target_lat: float, selector: dict) -> dict:
+    lon = np.asarray(lon)
+    lat = np.asarray(lat)
+    target_lon = wrap_lon(target_lon)
+    target_lat = float(target_lat)
+
+    if lon.ndim != 1 or lat.ndim != 1:
+        raise ValueError("Expected 1-D lon/lat arrays.")
+
+    method = selector["method"]
+    if method == "nearest":
+        ilon = int(np.argmin(lon_diff(lon, target_lon)))
+        ilat = int(np.argmin(np.abs(lat - target_lat)))
+        return {
+            "method": "nearest",
+            "lon_idx": np.array([ilon], dtype=int),
+            "lat_idx": np.array([ilat], dtype=int),
+            "actual_lon": float(lon[ilon]),
+            "actual_lat": float(lat[ilat]),
+            "label": f"nearest ({lon[ilon]:.2f}E,{lat[ilat]:.2f}N)",
+        }
+
+    lon_half = float(selector["lon_half_width"])
+    lat_half = float(selector["lat_half_width"])
+    lon_mask = lon_diff(lon, target_lon) <= lon_half
+    lat_mask = np.abs(lat - target_lat) <= lat_half
+    lon_idx = np.where(lon_mask)[0]
+    lat_idx = np.where(lat_mask)[0]
+    if lon_idx.size == 0 or lat_idx.size == 0:
+        raise ValueError("box_mean selected no grid points.")
+
+    lon_sel = lon[lon_idx]
+    lat_sel = lat[lat_idx]
+    return {
+        "method": "box_mean",
+        "lon_idx": lon_idx,
+        "lat_idx": lat_idx,
+        "actual_lon": float(mean_lon_deg(lon_sel)),
+        "actual_lat": float(np.mean(lat_sel)),
+        "lon_min": float(np.min(lon_sel)),
+        "lon_max": float(np.max(lon_sel)),
+        "lat_min": float(np.min(lat_sel)),
+        "lat_max": float(np.max(lat_sel)),
+        "label": (
+            f"box mean lon[{np.min(lon_sel):.2f},{np.max(lon_sel):.2f}] "
+            f"lat[{np.min(lat_sel):.2f},{np.max(lat_sel):.2f}]"
+        ),
     }
-    return profile
 
 
-def read_gsrm_profile(model: str, nowtime: datetime, lon: float, lat: float, levb: tuple[float, float]) -> dict:
-    lon_arr, lat_arr, lev, q = uread.read_gsrm(model, "hus", nowtime, levb=levb, daily=True)
-    _, _, _, t = uread.read_gsrm(model, "ta", nowtime, levb=levb, daily=True)
-    _, _, _, u = uread.read_gsrm(model, "ua", nowtime, levb=levb, daily=True)
-    _, _, _, v = uread.read_gsrm(model, "va", nowtime, levb=levb, daily=True)
-    _, _, _, z = uread.read_gsrm(model, "zg", nowtime, levb=levb, daily=True)
+def extract_profile(data: np.ndarray, selection: dict) -> np.ndarray:
+    arr = np.asarray(data)
+    if arr.ndim != 3:
+        raise ValueError("Expected 3-D field with dimensions (lev, lat, lon).")
 
-    ilat, ilon = nearest_xy(lon_arr, lat_arr, lon, lat)
-    profile = {
-        "p": lev,
-        "t": t[:, ilat, ilon],
-        "q": q[:, ilat, ilon],
-        "u": u[:, ilat, ilon],
-        "v": v[:, ilat, ilon],
-        "z": z[:, ilat, ilon],
-        "lon": float(lon_arr[ilon]),
-        "lat": float(lat_arr[ilat]),
-        "source_label": model.upper(),
-    }
-    return profile
+    lat_idx = selection["lat_idx"]
+    lon_idx = selection["lon_idx"]
+    subset = arr[:, lat_idx, :][:, :, lon_idx]
+    if selection["method"] == "nearest":
+        return np.squeeze(subset[:, 0, 0])
+    return np.nanmean(subset, axis=(1, 2))
 
 
-def read_profile(source: str, nowtime: datetime, lon: float, lat: float, levb: tuple[float, float]) -> dict:
+def resolve_time_label(source: str, nowtime: datetime, daily_mean: bool) -> str:
+    if source.lower() == "era5" or daily_mean:
+        return nowtime.strftime("%Y-%m-%d daily mean")
+    return nowtime.strftime("%Y-%m-%d %H:%M")
+
+
+def resolve_time_token(source: str, nowtime: datetime, daily_mean: bool) -> str:
+    if source.lower() == "era5" or daily_mean:
+        return nowtime.strftime("%Y%m%d_daymean")
+    return nowtime.strftime("%Y%m%d_at%H%M")
+
+
+def read_raw_fields(source: str, nowtime: datetime, levb: tuple[float, float], daily_mean: bool) -> dict:
     source = source.lower()
     if source == "era5":
-        return read_era5_profile(nowtime, lon, lat, levb)
-    if source in {"nicam", "icon"}:
-        return read_gsrm_profile(source, nowtime, lon, lat, levb)
-    raise ValueError(f"Unsupported source: {source}")
+        lon, lat, lev, q = uread.read_era5_3d("q", nowtime, levb=levb)
+        _, _, _, t = uread.read_era5_3d("t", nowtime, levb=levb)
+        _, _, _, u = uread.read_era5_3d("u", nowtime, levb=levb)
+        _, _, _, v = uread.read_era5_3d("v", nowtime, levb=levb)
+        _, _, _, z = uread.read_era5_3d("z", nowtime, levb=levb)
+        z = z / skewt.C.G
+        source_label = "ERA5"
+    elif source in {"nicam", "icon"}:
+        lon, lat, lev, q = uread.read_gsrm(source, "hus", nowtime, levb=levb, daily=daily_mean)
+        _, _, _, t = uread.read_gsrm(source, "ta", nowtime, levb=levb, daily=daily_mean)
+        _, _, _, u = uread.read_gsrm(source, "ua", nowtime, levb=levb, daily=daily_mean)
+        _, _, _, v = uread.read_gsrm(source, "va", nowtime, levb=levb, daily=daily_mean)
+        _, _, _, z = uread.read_gsrm(source, "zg", nowtime, levb=levb, daily=daily_mean)
+        source_label = source.upper()
+    else:
+        raise ValueError(f"Unsupported source: {source}")
+
+    return {
+        "source": source,
+        "source_label": source_label,
+        "lon": np.asarray(lon),
+        "lat": np.asarray(lat),
+        "lev": np.asarray(lev),
+        "q": np.asarray(q),
+        "t": np.asarray(t),
+        "u": np.asarray(u),
+        "v": np.asarray(v),
+        "z": np.asarray(z),
+        "daily_mean": bool(daily_mean),
+        "time_label": resolve_time_label(source, nowtime, daily_mean),
+        "time_token": resolve_time_token(source, nowtime, daily_mean),
+    }
 
 
-def build_skewt_inputs(profile: dict) -> dict:
+def build_profile(case: dict) -> dict:
+    source = case["model"].lower()
+    nowtime = parse_time(case["time"])
+    levb = tuple(case.get("levb", (1000.0, 100.0)))
+    daily_mean = bool(case.get("daily_mean", source != "era5"))
+    selector = get_selector(case)
+
+    raw = read_raw_fields(source, nowtime, levb, daily_mean)
+    selection = build_selection(raw["lon"], raw["lat"], case["lon"], case["lat"], selector)
+
     p, t, q, u, v, z = sort_profile(
-        profile["p"], profile["t"], profile["q"], profile["u"], profile["v"], profile["z"]
+        raw["lev"],
+        extract_profile(raw["t"], selection),
+        extract_profile(raw["q"], selection),
+        extract_profile(raw["u"], selection),
+        extract_profile(raw["v"], selection),
+        extract_profile(raw["z"], selection),
     )
+
     mask = valid_profile_mask(p, t, q, u, v, z) & (p > 0.0) & (q >= 0.0)
     p = p[mask]
     t = t[mask]
@@ -149,135 +239,201 @@ def build_skewt_inputs(profile: dict) -> dict:
     the = skewt.cal_equivalent_potential_temperature(p, q, t)
     thes = skewt.cal_equivalent_potential_temperature(p, qvs, t)
     parcel_lev, parcel_t, parcel_qv, parcel_thes, lev_idx = skewt.parcel_profile(p[0], t[0], q[0])
-    lcl_p = parcel_lev[lev_idx]
-    cape_tv, cin_tv, _, lfc_p, el_p = skewt.cape_cin_tv_style(
+    lcl_p = float(parcel_lev[lev_idx])
+    cape, cin, _, lfc_p, el_p = skewt.cape_cin_tv_style(
         parcel_t, parcel_qv, parcel_lev, t, q, p, lcl_p=lcl_p
     )
+
     cwv = -1.0 * np.trapezoid(q, p * 100.0) / skewt.C.G
     ivtx = -1.0 * np.trapezoid(q * u, p * 100.0) / skewt.C.G
     ivty = -1.0 * np.trapezoid(q * v, p * 100.0) / skewt.C.G
+    ivt_mag = float(np.hypot(ivtx, ivty))
+
+    ivt700 = compute_layer_ivt(p, q, u, v, pbot=1000.0, ptop=700.0)
 
     return {
+        "source": source,
+        "source_label": raw["source_label"],
+        "requested_lon": float(case["lon"]),
+        "requested_lat": float(case["lat"]),
+        "actual_lon": float(selection["actual_lon"]),
+        "actual_lat": float(selection["actual_lat"]),
+        "selector": selection,
+        "time": nowtime,
+        "time_label": raw["time_label"],
+        "time_token": raw["time_token"],
+        "daily_mean": daily_mean,
         "p": p,
-        "t_c": t - 273.15,
+        "t": t,
         "td_c": td,
+        "q": q,
+        "u": u,
+        "v": v,
         "z": z,
         "the": the,
         "thes": thes,
         "parcel_lev": parcel_lev,
         "parcel_t": parcel_t,
         "parcel_thes": parcel_thes,
-        "cape": cape_tv,
-        "cin": cin_tv,
+        "cape": float(cape),
+        "cin": float(cin),
         "lcl": lcl_p,
         "lfc": lfc_p,
         "el": el_p,
-        "cwv": cwv,
-        "ivtx": ivtx,
-        "ivty": ivty,
+        "cwv": float(cwv),
+        "ivtx": float(ivtx),
+        "ivty": float(ivty),
+        "ivt_mag": ivt_mag,
+        "ivt_1000_700": ivt700,
     }
 
 
-def finite_or_nan(value: float | None) -> float:
-    return np.nan if value is None else float(value)
+def compute_layer_ivt(
+    p: np.ndarray, q: np.ndarray, u: np.ndarray, v: np.ndarray, *, pbot: float, ptop: float
+) -> dict:
+    mask = (p <= pbot) & (p >= ptop)
+    if np.count_nonzero(mask) < 2:
+        return {"u": np.nan, "v": np.nan, "mag": np.nan}
+
+    pu = -1.0 * np.trapezoid(q[mask] * u[mask], p[mask] * 100.0) / skewt.C.G
+    pv = -1.0 * np.trapezoid(q[mask] * v[mask], p[mask] * 100.0) / skewt.C.G
+    return {"u": float(pu), "v": float(pv), "mag": float(np.hypot(pu, pv))}
 
 
-def default_output_path(source: str, nowtime: datetime, lon: float, lat: float) -> pathlib.Path:
-    stamp = nowtime.strftime("%Y%m%d%H%M")
-    return THIS_DIR / f"skewt_{source.lower()}_{stamp}_{lon:.2f}_{lat:.2f}.png"
+def default_base_name(profile: dict) -> str:
+    lon_token = coord_token(profile["actual_lon"], "E", "W")
+    lat_token = coord_token(profile["actual_lat"], "N", "S")
+    selector_token = profile["selector"]["method"]
+    return f"{profile['source']}_{profile['time_token']}_{lon_token}_{lat_token}_{selector_token}"
 
 
-def plot_profile(
-    source: str,
-    nowtime: datetime,
-    lon: float,
-    lat: float,
+def save_profile_txt(profile: dict, output_dir: pathlib.Path, base_name: str) -> pathlib.Path:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    outpath = output_dir / f"prof_{base_name}.txt"
+    data = np.column_stack(
+        [
+            profile["p"],
+            profile["t"],
+            profile["q"] * 1000.0,
+            profile["u"],
+            profile["v"],
+        ]
+    )
+    header = "    P[hPa]       T[K]   Qv[g/kg]     U[m/s]     V[m/s]"
+    np.savetxt(outpath, data, fmt="%10.4f %10.4f %10.4f %10.1f %10.1f", header=header, comments="")
+    return outpath
+
+
+def plot_profile_figure(
+    profile: dict,
     *,
-    levb: tuple[float, float] = (1000.0, 100.0),
-    savepath: str | None = None,
+    output_dir: pathlib.Path,
+    base_name: str,
     show: bool = False,
-) -> tuple[dict, dict, pathlib.Path]:
-    profile = read_profile(source, nowtime, lon, lat, levb)
-    skewt_input = build_skewt_inputs(profile)
-    output_path = pathlib.Path(savepath) if savepath else default_output_path(source, nowtime, lon, lat)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-
+    dpi: int = 300,
+    plot_config: dict | None = None,
+) -> pathlib.Path:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    png_path = output_dir / f"skewt_{base_name}.png"
     title = (
-        f"{profile['source_label']} {nowtime:%Y-%m-%d} "
-        f"nearest=({profile['lon']:.2f}E,{profile['lat']:.2f}N)"
+        f"{profile['source_label']}  {profile['time_label']}  "
+        f"lon={profile['actual_lon']:.2f}E lat={profile['actual_lat']:.2f}N  "
+        f"{profile['selector']['label']}"
+    )
+    ivt700 = profile["ivt_1000_700"]
+    cfg = dict(plot_config or {})
+    cfg["additional_text"] = (
+        f"CWV: {profile['cwv']:.1f} mm\n"
+        f"IVT: {profile['ivt_mag']:.1f} kg/m/s\n"
+        f"IVT 1000-700: {ivt700['mag']:.1f}\n"
+        f"({ivt700['u']:.1f}, {ivt700['v']:.1f}) kg/m/s"
     )
     skewt.plot_skewt_mse(
-        skewt_input["p"],
-        skewt_input["t_c"],
-        skewt_input["td_c"],
-        skewt_input["z"],
-        skewt_input["parcel_lev"],
-        skewt_input["parcel_t"],
-        skewt_input["the"],
-        skewt_input["thes"],
-        skewt_input["parcel_thes"],
-        skewt_input["cape"],
-        skewt_input["cin"],
-        skewt_input["lcl"],
-        finite_or_nan(skewt_input["lfc"]),
-        finite_or_nan(skewt_input["el"]),
+        profile["p"],
+        profile["t"] - 273.15,
+        profile["td_c"],
+        profile["z"],
+        profile["parcel_lev"],
+        profile["parcel_t"],
+        profile["the"],
+        profile["thes"],
+        profile["parcel_thes"],
+        profile["cape"],
+        profile["cin"],
+        profile["lcl"],
+        finite_or_nan(profile["lfc"]),
+        finite_or_nan(profile["el"]),
+        u=profile["u"],
+        v=profile["v"],
         title=title,
-        savepath=str(output_path),
+        plot_config=cfg,
+        savepath=str(png_path),
         show=show,
+        dpi=dpi,
     )
-    return profile, skewt_input, output_path
+    return png_path
 
 
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        description="Read ERA5/NICAM/ICON daily-mean profile at nearest grid point and plot Skew-T."
+def process_case(case: dict) -> dict:
+    profile = build_profile(case)
+    output_dir = pathlib.Path(case.get("output_dir", THIS_DIR / "fig"))
+    base_name = case.get("base_name", default_base_name(profile))
+    fig_path = plot_profile_figure(
+        profile,
+        output_dir=output_dir,
+        base_name=base_name,
+        show=bool(case.get("show", False)),
+        dpi=int(case.get("dpi", 300)),
+        plot_config=case.get("plot_config"),
     )
-    parser.add_argument("source", choices=["era5", "nicam", "icon"])
-    parser.add_argument("time", help="e.g. 20180719 or 2018-07-19T00:00")
-    parser.add_argument("lon", type=float)
-    parser.add_argument("lat", type=float)
-    parser.add_argument("--pmin", type=float, default=100.0)
-    parser.add_argument("--pmax", type=float, default=1000.0)
-    parser.add_argument("--output", default=None)
-    parser.add_argument("--show", action="store_true")
-    return parser
+    prof_path = save_profile_txt(profile, output_dir, base_name)
+    return {"profile": profile, "figure_path": fig_path, "profile_path": prof_path}
 
 
 def main() -> None:
-    args = build_parser().parse_args()
-    nowtime = parse_time(args.time)
-    levb = (args.pmax, args.pmin)
-    try:
-        profile, skewt_input, output_path = plot_profile(
-            args.source,
-            nowtime,
-            args.lon,
-            args.lat,
-            levb=levb,
-            savepath=args.output,
-            show=args.show,
-        )
-    except FileNotFoundError as exc:
-        raise SystemExit(
-            f"Input data not found for source={args.source}, time={nowtime:%Y-%m-%d}: {exc}"
-        ) from exc
+    cases = [
+        {
+            "model": "nicam",
+            "time": "2020-06-02",
+            "lon": 120.0,
+            "lat": 23.0,
+            "daily_mean": True,
+            "selector": {
+                "method": "box_mean",
+                "lon_half_width": 1,
+                "lat_half_width": 1,
+            },
+            "output_dir": "./fig",
+        },
+        {
+            "model": "nicam",
+            "time": "2020-06-02",
+            "lon": 120.0,
+            "lat": 23.0,
+            "daily_mean": True,
+            "selector": {
+                "method": "nearest",
+            },
+            "output_dir": "./fig",
+        },
+    ]
 
-    print(
-        f"{profile['source_label']} nearest grid point: "
-        f"lon={profile['lon']:.3f}, lat={profile['lat']:.3f}"
-    )
-    print(
-        f"CAPE={skewt_input['cape']:.2f} J/kg, CIN={skewt_input['cin']:.2f} J/kg, "
-        f"LCL={skewt_input['lcl']:.1f} hPa, "
-        f"LFC={np.nan if skewt_input['lfc'] is None else skewt_input['lfc']:.1f} hPa, "
-        f"EL={np.nan if skewt_input['el'] is None else skewt_input['el']:.1f} hPa"
-    )
-    print(
-        f"CWV={skewt_input['cwv']:.2f} mm, "
-        f"IVTx={skewt_input['ivtx']:.2f} kg/m/s, "
-        f"IVTy={skewt_input['ivty']:.2f} kg/m/s"
-    )
-    print(f"saved: {output_path}")
+    for case in cases:
+        try:
+            result = process_case(case)
+        except FileNotFoundError as exc:
+            nowtime = parse_time(case["time"])
+            print(f"Input data not found for source={case['model']}, time={nowtime:%Y-%m-%d}: {exc}")
+            continue
+
+        profile = result["profile"]
+        print(
+            f"{profile['source_label']} {profile['time_label']} "
+            f"actual lon/lat=({profile['actual_lon']:.3f}, {profile['actual_lat']:.3f}) "
+            f"selector={profile['selector']['method']}"
+        )
+        print(f"figure: {result['figure_path']}")
+        print(f"profile: {result['profile_path']}")
 
 
 if __name__ == "__main__":

@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import pathlib
 import sys
+from multiprocessing import Pool
 from datetime import datetime
 
 THIS_DIR = pathlib.Path(__file__).resolve().parent
@@ -15,6 +16,7 @@ os.environ.setdefault("MPLCONFIGDIR", "/tmp")
 os.environ.setdefault("XDG_CACHE_HOME", "/tmp")
 
 import numpy as np
+import pandas as pd
 
 import skewt
 from utils import utils_read as uread
@@ -40,6 +42,26 @@ def parse_time(value: str | datetime) -> datetime:
         except ValueError:
             pass
     raise ValueError(f"Unsupported time format: {value}")
+
+
+def parse_bool(value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"1", "true", "t", "yes", "y"}:
+            return True
+        if normalized in {"0", "false", "f", "no", "n"}:
+            return False
+    raise ValueError(f"Unsupported boolean value: {value}")
+
+
+def csv_value_matches(series: pd.Series, expected: object) -> pd.Series:
+    if isinstance(expected, bool):
+        return series.map(parse_bool) == expected
+    if expected is None:
+        return series.isna()
+    return series.astype(str).str.strip() == str(expected)
 
 
 def wrap_lon(lon: float) -> float:
@@ -165,6 +187,65 @@ def resolve_time_token(source: str, nowtime: datetime, daily_mean: bool) -> str:
     if source.lower() == "era5" or daily_mean:
         return nowtime.strftime("%Y%m%d_daymean")
     return nowtime.strftime("%Y%m%d_at%H%M")
+
+
+def filter_case_dates_from_csv(
+    csv_path: str | pathlib.Path,
+    *,
+    filters: dict[str, object] | None = None,
+) -> list[str]:
+    csv_path = pathlib.Path(csv_path)
+    df = pd.read_csv(csv_path)
+    filters = dict(filters or {})
+
+    mask = pd.Series(True, index=df.index)
+    for column, expected in filters.items():
+        if column not in df.columns:
+            raise KeyError(f"Column {column!r} not found in {csv_path}")
+        if column == "model" and expected is not None:
+            mask &= df[column].astype(str).str.strip().str.lower() == str(expected).strip().lower()
+            continue
+        mask &= csv_value_matches(df[column], expected)
+
+    return df.loc[mask, "time"].astype(str).tolist()
+
+
+def build_cases_from_csv_dates(
+    csv_path: str | pathlib.Path,
+    *,
+    model: str,
+    lon: float,
+    lat: float,
+    filters: dict[str, object] | None = None,
+    daily_mean: bool = True,
+    selector: dict | None = None,
+    figure_output_dir: str | pathlib.Path = "./fig",
+    profile_output_dir: str | pathlib.Path = "./prof",
+    levb: tuple[float, float] = (1000.0, 10.0),
+    extra_case_fields: dict | None = None,
+) -> list[dict]:
+    filters = dict(filters or {})
+    filters.setdefault("model", model)
+    dates = filter_case_dates_from_csv(csv_path, filters=filters)
+    selector_cfg = dict(selector or {"method": "nearest"})
+    extra_fields = dict(extra_case_fields or {})
+
+    cases: list[dict] = []
+    for time_str in dates:
+        case = {
+            "model": model,
+            "time": time_str,
+            "lon": lon,
+            "lat": lat,
+            "daily_mean": daily_mean,
+            "selector": dict(selector_cfg),
+            "figure_output_dir": figure_output_dir,
+            "profile_output_dir": profile_output_dir,
+            "levb": levb,
+        }
+        case.update(extra_fields)
+        cases.append(case)
+    return cases
 
 
 def read_raw_fields(source: str, nowtime: datetime, levb: tuple[float, float], daily_mean: bool) -> dict:
@@ -376,64 +457,85 @@ def plot_profile_figure(
 
 def process_case(case: dict) -> dict:
     profile = build_profile(case)
-    output_dir = pathlib.Path(case.get("output_dir", THIS_DIR / "fig"))
+    figure_output_dir = pathlib.Path(case.get("figure_output_dir", THIS_DIR / "fig"))
+    profile_output_dir = pathlib.Path(case.get("profile_output_dir", THIS_DIR / "prof"))
     base_name = case.get("base_name", default_base_name(profile))
     fig_path = plot_profile_figure(
         profile,
-        output_dir=output_dir,
+        output_dir=figure_output_dir,
         base_name=base_name,
         show=bool(case.get("show", False)),
         dpi=int(case.get("dpi", 300)),
         plot_config=case.get("plot_config"),
     )
-    prof_path = save_profile_txt(profile, output_dir, base_name)
+    prof_path = save_profile_txt(profile, profile_output_dir, base_name)
     return {"profile": profile, "figure_path": fig_path, "profile_path": prof_path}
 
 
-def main() -> None:
-    cases = [
-        {
-            "model": "nicam",
-            "time": "2020-06-02",
-            "lon": 120.0,
-            "lat": 23.0,
-            "daily_mean": True,
-            "selector": {
-                "method": "box_mean",
-                "lon_half_width": 1,
-                "lat_half_width": 1,
-            },
-            "output_dir": "./fig",
-        },
-        {
-            "model": "nicam",
-            "time": "2020-06-02",
-            "lon": 120.0,
-            "lat": 23.0,
-            "daily_mean": True,
-            "selector": {
-                "method": "nearest",
-            },
-            "output_dir": "./fig",
-        },
-    ]
-
-    for case in cases:
-        try:
-            result = process_case(case)
-        except FileNotFoundError as exc:
-            nowtime = parse_time(case["time"])
-            print(f"Input data not found for source={case['model']}, time={nowtime:%Y-%m-%d}: {exc}")
-            continue
-
+def process_case_safe(case: dict) -> dict:
+    try:
+        result = process_case(case)
         profile = result["profile"]
         print(
             f"{profile['source_label']} {profile['time_label']} "
             f"actual lon/lat=({profile['actual_lon']:.3f}, {profile['actual_lat']:.3f}) "
-            f"selector={profile['selector']['method']}"
+            f"selector={profile['selector']['method']}",
+            flush=True,
         )
-        print(f"figure: {result['figure_path']}")
-        print(f"profile: {result['profile_path']}")
+        print(f"figure: {result['figure_path']}", flush=True)
+        print(f"profile: {result['profile_path']}", flush=True)
+        print(" ", flush=True)
+        return {"ok": True, "case": case, "result": result}
+    except FileNotFoundError as exc:
+        nowtime = parse_time(case["time"])
+        print(
+            f"FileNotFoundError for source={case['model']}, time={nowtime:%Y-%m-%d}: {exc}",
+            flush=True,
+        )
+        return {"ok": False, "case": case, "error_type": "FileNotFoundError", "error": str(exc)}
+    except Exception as exc:
+        nowtime = parse_time(case["time"])
+        print(
+            f"{type(exc).__name__} for source={case['model']}, time={nowtime:%Y-%m-%d}: {exc}",
+            flush=True,
+        )
+        return {"ok": False, "case": case, "error_type": type(exc).__name__, "error": str(exc)}
+
+
+def run_cases_parallel(cases: list[dict], nproc: int = 5) -> list[dict]:
+    with Pool(processes=nproc) as pool:
+        return pool.map(process_case_safe, cases)
+
+
+def main() -> None:
+    model = "nicam"
+    filters = {
+        "wtype": "other",
+        "diurnal_rain": True,
+    }
+    csv_path = THIS_DIR.parent / "synoptic" / "csv" / f"{model}_2020.csv"
+    cases = build_cases_from_csv_dates(
+        csv_path,
+        model=model,
+        # TPE location
+        lon=121.514689,
+        lat=25.037363,
+        filters=filters,
+        daily_mean=True,
+        selector={
+            "method": "box_mean",
+            "lon_half_width": 0.125,
+            "lat_half_width": 0.125,
+        },
+        figure_output_dir="./fig",
+        profile_output_dir="./prof",
+    )
+    if not cases:
+        print(f"No cases found in {csv_path} for filters={filters}.")
+        return
+
+    nproc = min(5, len(cases))
+    run_cases_parallel(cases, nproc=nproc)
 
 
 if __name__ == "__main__":

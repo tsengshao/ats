@@ -226,7 +226,7 @@ def T_from_thetae(thetae_K: float, p_hPa: float) -> float:
         thetae = cal_equivalent_potential_temperature(p_hPa, qvs, T)
         return float(thetae - thetae_K)
 
-    # Robust bracket: £ce increases monotonically with T at fixed p
+    # Robust bracket: Â£ce increases monotonically with T at fixed p
     a, b = 180.0, 360.0  # K, wide physical range for troposphere
     Fa, Fb = F(a), F(b)
 
@@ -310,7 +310,7 @@ def compute_cape_cin_LCL_LFC_EL(parcel_lev, parcel_thes, pres_env, thes_env, LCL
         idx_LCL = int(idx_LCL[0] + 1) if idx_LCL.size else None
         LCL_p = float(p_par[idx_LCL]) if idx_LCL is not None else None
 
-    # Identify LFC (first crossing: stable ¡÷ unstable) and EL (unstable ¡÷ stable)
+    # Identify LFC (first crossing: stable Â¡Ã· unstable) and EL (unstable Â¡Ã· stable)
     sgn = np.sign(diff)
     LFC_p = None
     EL_p = None
@@ -341,13 +341,13 @@ def compute_cape_cin_LCL_LFC_EL(parcel_lev, parcel_thes, pres_env, thes_env, LCL
     if idx_LFC is not None:
         mask_cin = (diff[:idx_LFC] > 0)
         if np.any(mask_cin):
-            CIN = Rd * np.trapz(diff[:idx_LFC][mask_cin], lnp[:idx_LFC][mask_cin])
+            CIN = Rd * np.trapezoid(diff[:idx_LFC][mask_cin], lnp[:idx_LFC][mask_cin])
 
     if (idx_LFC is not None) and (idx_EL is not None) and (idx_EL > idx_LFC):
         seg = diff[idx_LFC:idx_EL]
         x = lnp[idx_LFC:idx_EL]
         if np.any(seg < 0):
-            CAPE = Rd * np.trapz(seg[seg < 0], x[seg < 0])
+            CAPE = Rd * np.trapezoid(seg[seg < 0], x[seg < 0])
 
     return CIN, CAPE, LCL_p, LFC_p, EL_p
 
@@ -453,11 +453,11 @@ def cape_cin_tv_style(T_parcel, qv_parcel, press_parcel,
     if idx_LFC is not None and idx_LFC > 0:
         mask_cin = diff[:idx_LFC] > 0.0
         if np.any(mask_cin):
-            CIN = Rd * np.trapz(diff[:idx_LFC][mask_cin], lnp[:idx_LFC][mask_cin])
+            CIN = Rd * np.trapezoid(diff[:idx_LFC][mask_cin], lnp[:idx_LFC][mask_cin])
     else:
         mask_cin = diff > 0.0
         if np.any(mask_cin):
-            CIN = Rd * np.trapz(diff[mask_cin], lnp[mask_cin])
+            CIN = Rd * np.trapezoid(diff[mask_cin], lnp[mask_cin])
 
     # CAPE: between LFC and EL (or to top if no EL)
     if (idx_LFC is not None) and (idx_EL is not None) and (idx_EL > idx_LFC):
@@ -465,13 +465,13 @@ def cape_cin_tv_style(T_parcel, qv_parcel, press_parcel,
         x = lnp[idx_LFC:idx_EL]
         mask_cap = seg < 0.0
         if np.any(mask_cap):
-            CAPE = Rd * np.trapz(seg[mask_cap], x[mask_cap])
+            CAPE = Rd * np.trapezoid(seg[mask_cap], x[mask_cap])
     elif (idx_LFC is not None) and (idx_EL is None):
         seg = diff[idx_LFC:]
         x = lnp[idx_LFC:]
         mask_cap = seg < 0.0
         if np.any(mask_cap):
-            CAPE = Rd * np.trapz(seg[mask_cap], x[mask_cap])
+            CAPE = Rd * np.trapezoid(seg[mask_cap], x[mask_cap])
 
     CAPE = float(max(CAPE, 0.0))
     CIN  = float(min(CIN, 0.0))
@@ -533,7 +533,7 @@ def plot_skewt_mse(
                 bbox=dict(facecolor='white', alpha=0.8, edgecolor='none'))
 
     yticks = np.array([100,200,300,400,500,600,700,800,900,1000])
-    yticks_hei = np.interp(np.log(yticks[::-1]), np.log(pres[::-1]), hei[::-1])
+    yticks_hei = np.interp(np.log(yticks[::-1]), np.log(p[::-1]), hei[::-1])
     yticks_hei = yticks_hei[::-1]/1000.
 
     ax_skew.set_yticks(yticks)
@@ -630,9 +630,9 @@ if __name__=="__main__":
     lcl_p = parcel_lev[lev_idx]
     CIN, CAPE, LCL, LFC, EL = compute_cape_cin_LCL_LFC_EL(parcel_lev, parcel_thes, pres, thes, LCL_p=lcl_p)
     CAPE_tv, CIN_tv, LCLp_tv, LFCp_tv, ELp_tv = cape_cin_tv_style(parcel_t, parcel_qv, parcel_lev, temp, qv, pres, lcl_p)#, LCL, LFC, EL)
-    CWV = -1*np.trapz(qv,pres*100.)/C.G
-    ivtx = -1*np.trapz(qv*u,pres*100.)/C.G
-    ivty = -1*np.trapz(qv*v,pres*100.)/C.G
+    CWV = -1*np.trapezoid(qv,pres*100.)/C.G
+    ivtx = -1*np.trapezoid(qv*u,pres*100.)/C.G
+    ivty = -1*np.trapezoid(qv*v,pres*100.)/C.G
     print(f"-----")
     print(f"CIN = {CIN:.2f} J/kg, CAPE = {CAPE:.2f} J/kg")
     print(f"LCL = {LCL:.1f} hPa, LFC = {LFC:.1f} hPa, EL = {EL:.1f} hPa")

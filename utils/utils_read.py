@@ -168,14 +168,14 @@ def read_gsrm(model,varname,nowtime,lonb=None,latb=None,levb=None, daily=False,t
     if varname in ['orog', 'sftlf']:
        tstr='1970-01-01T00:00:00'
 
-    if daily and tw_time:
-       d1 = datatime - timedelta(hours=8)
-       d2 = datatime + timedelta(hours=15)
+    if daily:
+       d1 = datatime
+       d2 = datatime + timedelta(hours=24)
        tstr1 = d1.strftime('%Y-%m-%dT%H:%M:%S')
        tstr2 = d2.strftime('%Y-%m-%dT%H:%M:%S')
        tstr = slice(tstr1, tstr2)
 
-    data_da = ds[vname].sel(time=tstr)
+    #data_da = ds[vname].sel(time=tstr)
     data = np.squeeze(ds[vname].sel(time=tstr).values)
     if daily:
         #data = np.nanmean(data,axis=0)

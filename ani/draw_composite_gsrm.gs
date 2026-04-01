@@ -4,13 +4,13 @@
 
 model='icon'
 mlarge='ICON'
-ncase='11'
+ncase='20'
 bcdir='2DBC'
 
-model='nicam'
-mlarge='NICAM'
-ncase='12'
-bcdir='2dbc'
+** model='nicam'
+** mlarge='NICAM'
+** ncase='17'
+** bcdir='2dbc'
 
 'sdfopen ../data/rainfall_composite/rcomp_'model'.nc'
 'sdfopen ../data/prepare/'model'_EA/'bcdir'/orog.nc'

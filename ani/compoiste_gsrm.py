@@ -16,14 +16,16 @@ lonb = [105.0, 137.0]
 latb = [12.0, 37.0]
 
 model = 'nicam'
+#model = 'icon'
 #ds = pd.read_csv(f'../obs/shao_ATdays_2020_2020_{model}.txt', header=None)
 #ds = pd.to_datetime(ds[0])
+ds = uread.read_selected_date(model)
 
-df = pd.read_csv(f'../synoptic/csv/{model}_2020.csv',
-                 usecols=['time', 'wtype', 'diurnal_rain']
-                )
-iloc = (df['wtype']=='other') * (df['diurnal_rain']==True)
-ds = pd.to_datetime( df['time'][iloc].reset_index(drop='index') )
+##  df = pd.read_csv(f'../synoptic/csv/{model}_2020.csv',
+##                   usecols=['time', 'wtype', 'diurnal_rain']
+##                  )
+##  iloc = (df['wtype']=='other') * (df['diurnal_rain']==True)
+##  ds = pd.to_datetime( df['time'][iloc].reset_index(drop='index') )
 
 nday = ds.size
 

@@ -29,15 +29,30 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", required=True, help="mode folder, e.g. fig/nicam")
-    parser.add_argument("--start", required=True, help="start date, YYYY-MM-DD")
-    parser.add_argument("--days", type=int, required=True, help="number of days")
+    parser.add_argument("--start", help="start date, YYYY-MM-DD")
+    parser.add_argument("--days", type=int, help="number of days")
+    parser.add_argument(
+        "--selected-dates",
+        help="txt path like *_selected_date.txt; each line may be '1 03Jun2020' or '03Jun2020'",
+    )
     parser.add_argument("--output", required=True, help="output pptx path, e.g. pptx/nicam_first10.pptx")
     parser.add_argument(
         "--selected-only",
         action="store_true",
         help="only output selected slides, identified by other_1 filenames",
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+
+    has_range = args.start is not None or args.days is not None
+    has_selected_dates = args.selected_dates is not None
+    if has_range and has_selected_dates:
+        parser.error("use either --start/--days or --selected-dates")
+    if not has_range and not has_selected_dates:
+        parser.error("either --start/--days or --selected-dates is required")
+    if has_range and (args.start is None or args.days is None):
+        parser.error("--start and --days must be provided together")
+
+    return args
 
 
 def resolve_path(path_str: str) -> Path:
@@ -47,6 +62,10 @@ def resolve_path(path_str: str) -> Path:
 
 def date_to_key(day: datetime) -> str:
     return day.strftime("%Y%m%d")
+
+
+def selected_date_to_key(date_text: str) -> str:
+    return datetime.strptime(date_text, "%d%b%Y").strftime("%Y%m%d")
 
 
 def find_image(folder: Path, pattern: str, day_key: str) -> Path:
@@ -177,6 +196,43 @@ def collect_days(mode_dir: Path, start_day: datetime, days: int) -> list[dict[st
     return items
 
 
+def parse_selected_dates(selected_dates_path: Path) -> list[tuple[str, int]]:
+    items: list[tuple[str, int]] = []
+    for line_no, raw_line in enumerate(selected_dates_path.read_text(encoding="utf-8").splitlines(), start=1):
+        line = raw_line.strip()
+        if not line:
+            continue
+
+        parts = line.split()
+        if len(parts) == 1:
+            selected_idx = len(items) + 1
+            date_text = parts[0]
+        elif len(parts) == 2 and parts[0].isdigit():
+            selected_idx = int(parts[0])
+            date_text = parts[1]
+        else:
+            raise ValueError(f"invalid selected date line {line_no}: {raw_line!r}")
+
+        items.append((selected_date_to_key(date_text), selected_idx))
+    return items
+
+
+def collect_selected_days(mode_dir: Path, selected_dates_path: Path) -> list[tuple[dict[str, Path], int]]:
+    items: list[tuple[dict[str, Path], int]] = []
+    for day_key, selected_idx in parse_selected_dates(selected_dates_path):
+        items.append(
+            (
+                {
+                    "rain": find_image(mode_dir / "rain", "imerg_{day}_*.png", day_key),
+                    "ivt": find_image(mode_dir / "ivt", "ivt_{day}_*.png", day_key),
+                    "skewt": find_image(mode_dir / "skewt", f"skewt_{mode_dir.name}_{{day}}_*.png", day_key),
+                },
+                selected_idx,
+            )
+        )
+    return items
+
+
 def selected_index_map(mode_dir: Path) -> dict[str, int]:
     mapping: dict[str, int] = {}
     selected_counter = 0
@@ -191,19 +247,24 @@ def selected_index_map(mode_dir: Path) -> dict[str, int]:
 def main() -> None:
     args = parse_args()
     mode_dir = resolve_path(args.mode)
-    start_day = datetime.strptime(args.start, "%Y-%m-%d")
     output = resolve_path(args.output)
 
     prs = Presentation()
     prs.slide_width = Inches(SLIDE_W_IN)
     prs.slide_height = Inches(SLIDE_H_IN)
 
-    selected_map = selected_index_map(mode_dir)
-    for images in collect_days(mode_dir, start_day, args.days):
-        if args.selected_only and not is_selected(images):
-            continue
-        selected_idx = selected_map.get(day_key_from_rain(images["rain"]))
-        add_day_slide(prs, mode_dir.name, images, selected_idx)
+    if args.selected_dates:
+        selected_dates_path = resolve_path(args.selected_dates)
+        for images, selected_idx in collect_selected_days(mode_dir, selected_dates_path):
+            add_day_slide(prs, mode_dir.name, images, selected_idx)
+    else:
+        start_day = datetime.strptime(args.start, "%Y-%m-%d")
+        selected_map = selected_index_map(mode_dir)
+        for images in collect_days(mode_dir, start_day, args.days):
+            if args.selected_only and not is_selected(images):
+                continue
+            selected_idx = selected_map.get(day_key_from_rain(images["rain"]))
+            add_day_slide(prs, mode_dir.name, images, selected_idx)
 
     output.parent.mkdir(parents=True, exist_ok=True)
     prs.save(str(output))

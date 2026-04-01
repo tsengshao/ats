@@ -4,6 +4,8 @@
 *.npy
 *.npz
 *.csv
+*.codex
 __pycache__
 obs/shao_ATdays_2020_2020_*.txt*
+skewt/prof
 vvm

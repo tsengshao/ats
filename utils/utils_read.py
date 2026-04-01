@@ -7,6 +7,7 @@ import h5py
 import multiprocessing
 import xarray as xr
 import warnings
+import pandas as pd
 
 def crop_data(lonb, latb, lon, lat, data, zaxis=0):
     ilon0 = np.argmin(np.abs(lonb[0]-lon))
@@ -263,4 +264,14 @@ def read_rgb_file(path, product_name, nowtime, lonb=None, latb=None):
         lon, lat, rgb_data = crop_data(lonb, latb, lon, lat, rgb_data, zaxis=-1)
 
     return lon, lat, rgb_data
+
+def read_selected_date(model, tag='manual'):
+    _THIS_FILE = pathlib.Path(__file__).resolve()
+    _PROJECT_ROOT = _THIS_FILE.parent.parent
+    _PREPARE_DIR = _PROJECT_ROOT / "data" / "selected_date"
+    fname=f'{_PREPARE_DIR}/{model}_selected_{tag}.txt'
+    print(f'-- uread --, selected file: {fname}')
+    ds = pd.read_csv(fname, sep=' ', header=None)
+    ds = pd.to_datetime(ds.iloc[:,1])
+    return ds
 

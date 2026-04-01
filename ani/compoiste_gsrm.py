@@ -10,12 +10,21 @@ from datetime import timedelta, datetime
 import pandas as pd
 import xarray as xr
 
-lonb = [110., 135.]
-latb = [10.,   35.]
+#lonb = [110., 135.]
+#latb = [10.,   35.]
+lonb = [105.0, 137.0]
+latb = [12.0, 37.0]
 
-model = 'icon'
-ds = pd.read_csv(f'../obs/shao_ATdays_2020_2020_{model}.txt', header=None)
-ds = pd.to_datetime(ds[0])
+model = 'nicam'
+#ds = pd.read_csv(f'../obs/shao_ATdays_2020_2020_{model}.txt', header=None)
+#ds = pd.to_datetime(ds[0])
+
+df = pd.read_csv(f'../synoptic/csv/{model}_2020.csv',
+                 usecols=['time', 'wtype', 'diurnal_rain']
+                )
+iloc = (df['wtype']=='other') * (df['diurnal_rain']==True)
+ds = pd.to_datetime( df['time'][iloc].reset_index(drop='index') )
+
 nday = ds.size
 
 lon_gs,  lat_gs,  pr_gs = \
@@ -59,10 +68,13 @@ ds = xr.Dataset(
         "Conventions": "CF-1.8",
         "institution": "OpenAI Atmospheric Lab",
         "source": "Synthetic data",
-        "history": "created with xarray"
+        "history": "created with xarray",
+        "number_of_cases": nday,
     }
 )
 
 # Save with NetCDF4 Classic format (recommended for GrADS)
-ds.to_netcdf(f"../data/rainfall_composite/rcomp_{model}.nc", format="NETCDF4_CLASSIC")
+outdir = '../data/rainfall_composite'
+os.makedirs(outdir, exist_ok=True)
+ds.to_netcdf(f"{outdir}/rcomp_{model}.nc", format="NETCDF4_CLASSIC")
 

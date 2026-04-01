@@ -4,15 +4,17 @@
 
 model='icon'
 mlarge='ICON'
-ncase='19'
+ncase='11'
+bcdir='2DBC'
 
-* model='nicam'
-* mlarge='NICAM'
-* ncase='16'
+model='nicam'
+mlarge='NICAM'
+ncase='12'
+bcdir='2dbc'
 
 'sdfopen ../data/rainfall_composite/rcomp_'model'.nc'
-'sdfopen /data/C.shaoyu/hackathon/nicam/2dbc/orog.nc'
-'sdfopen /data/C.shaoyu/hackathon/nicam/2dbc/sftlf.nc'
+'sdfopen ../data/prepare/'model'_EA/'bcdir'/orog.nc'
+'sdfopen ../data/prepare/'model'_EA/'bcdir'/sftlf.nc'
 
 topocmap='250 3000 250 -gxout shaded -kind white->(100,100,100)'
 raincmap='-levs 2 5 10 15 25 -gxout grfill -kind (255,255,255,0)-(0)->(84,104,245)->(11,191,38)->(242,226,5)->(242,5,5)->(204,7,204)'

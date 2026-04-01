@@ -508,10 +508,11 @@ def run_cases_parallel(cases: list[dict], nproc: int = 5) -> list[dict]:
 
 
 def main() -> None:
-    model = "nicam"
+    model = "icon"
     filters = {
-        "wtype": "other",
-        "diurnal_rain": True,
+        #"wtype": "other",
+        #"diurnal_rain": True,
+        "model": model, 
     }
     csv_path = THIS_DIR.parent / "synoptic" / "csv" / f"{model}_2020.csv"
     cases = build_cases_from_csv_dates(
@@ -527,8 +528,8 @@ def main() -> None:
             "lon_half_width": 0.125,
             "lat_half_width": 0.125,
         },
-        figure_output_dir="./fig",
-        profile_output_dir="./prof",
+        figure_output_dir=f"./fig/{model}",
+        profile_output_dir=f"./prof/{model}",
     )
     if not cases:
         print(f"No cases found in {csv_path} for filters={filters}.")

@@ -12,6 +12,7 @@ sys.path.insert(0, '..')
 import utils.utils_draw as udraw
 import utils.utils_plot_cartopy as ucartopy
 import utils.utils_read as uread
+from ivt_gsrm_common import get_tw_hourly_rain
 
 
 lonb = [105, 137]
@@ -45,6 +46,7 @@ def draw_gsrm_rain(model, nowtime):
     lon_gs, lat_gs, rain_gs = uread.read_gsrm(
         model, 'pr', nowtime, lonb, latb, daily=True, tw_time=True,
     )
+    _, _, _, _, rain_land = get_tw_hourly_rain(model, nowtime)
     # lon_e, lat_e, suf_geo_e = uread.read_era5_2d('suf_geo', nowtime, lonb, latb)
     # topo_e = suf_geo_e / 9.8
     topo_lon, topo_lat, topo_height = uread.read_gsrm(
@@ -78,6 +80,11 @@ def draw_gsrm_rain(model, nowtime):
     h0 = c.height / 3
     cax1 = fig.add_axes([c.x1 + 0.01, c.y0 + h0 * 0, 0.03, h])
     cax2 = fig.add_axes([c.x1 + 0.01, c.y0 + h0 * 1, 0.03, h])
+    ax2 = fig.add_axes([c.x0, 
+                        c.y0 + c.height * 0.78,
+                        c.width * 0.4,
+                        c.height * 0.22
+                       ])
 
     topo = ax1.contourf(
         topo_lon,
@@ -102,6 +109,44 @@ def draw_gsrm_rain(model, nowtime):
     cbar.ax.set_title('rain[mm/d]', fontsize=15, y=1.05, loc='left')
 
     plottools.Plot_cartopy_map(ax1)
+
+    x = np.arange(1, 25)
+    for igrid in range(rain_land.shape[0]):
+        ax2.plot(x, rain_land[igrid], color='0.85', lw=0.5)
+    ax2.plot(x, np.nanmean(rain_land, axis=0), color='#D70801', lw=3)
+    ax2.set_xticks(np.arange(3, 24, 3))
+    ax2.set_xlim(1, 24)
+    ax2.set_ylim(-2, 12.5)
+    ax2.set_yticks([0, 2.5, 5, 7.5, 10], labels=['0', '', '5', '', '10'])
+    ax2.set_ylabel('[mm/hr]', fontsize=12)
+    ax2.yaxis.set_label_position('right')
+    ax2.yaxis.set_label_coords(1.085, 0.5)
+    ax2.tick_params(axis='x', direction='in', pad=-12, labelsize=12)
+    ax2.tick_params(
+        axis='y',
+        direction='out',
+        left=False,
+        labelleft=False,
+        right=True,
+        labelright=True,
+        labelsize=12,
+    )
+    for label in ax2.get_yticklabels():
+        label.set_horizontalalignment('left')
+    ax2.grid(True)
+    ax2.set_facecolor((1, 1, 1, 0.95))
+
+    wtype_str, diurnal_flag = load_weather_label(model, nowtime)
+    diurnal_str = 'diurnal' if diurnal_flag == '1' else 'non-diurnal'
+    ax2.text(
+        0.02,
+        0.98,
+        f'mean ({rain_land.shape[0]})\n{diurnal_str}',
+        va='top',
+        ha='left',
+        transform=ax2.transAxes,
+    )
+
     datestr = nowtime.strftime('%Y-%m-%d')
     ax1.set_title(
         f'{datestr}\n{model.upper()}',
@@ -110,10 +155,9 @@ def draw_gsrm_rain(model, nowtime):
         fontsize=20,
     )
 
-    wtype_str, diurnal_flag = load_weather_label(model, nowtime)
     ax1.set_title(wtype_str, loc='right', fontweight='bold', fontsize=20)
 
-    outdir = f'./fig/{model}'
+    outdir = f'./fig/{model}/rain'
     os.makedirs(outdir, exist_ok=True)
     outfile = (
         f'{outdir}/imerg_{nowtime.strftime("%Y%m%d")}_{wtype_str}_{diurnal_flag}.png'

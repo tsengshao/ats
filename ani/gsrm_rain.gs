@@ -6,9 +6,9 @@ model='nicam'
 prdir='2d1h'
 bcdir='2dbc'
 
-* model='icon'
-* prdir='PT1H_inst'
-* bcdir='2DBC'
+model='icon'
+prdir='PT1H_inst'
+bcdir='2DBC'
 
 'sdfopen ../data/prepare/'model'_EA/'prdir'/pr.nc'
 'sdfopen ../data/prepare/'model'_EA/'bcdir'/orog.nc'
@@ -22,6 +22,7 @@ file='../data/selected_date/'model'_selected_manual.txt'
 topocmap='250 3000 250 -gxout shaded -kind white->(100,100,100)'
 raincmap='-levs 1 2 3 4 5 7 10 15 20 25 -gxout grfill -kind (255,255,255,0)->grainbow'
 raincmap='-levs 2 5 10 15 25 -gxout grfill -kind (255,255,255,0)-(0)->(84,104,245)->(11,191,38)->(242,226,5)->(242,5,5)->(204,7,204)'
+raincmap='-levs 1 2 5 10 15 20 30 50 100 -gxout grfill -kind (255,255,255,0)-(0)->(51,51,153)->(51,51,255)->(51,151,255)->(66,253,233)->(231,255,69)->(255,172,51)->(255,78,51)->(149,50,50)'
 
 date='18JUN2020'
 while (1)
@@ -33,7 +34,6 @@ while (1)
   icase = subwrd(line2,1)
   date = subwrd(line2,2)
   say icase' 'date
-*  date='13Jul2020'
 
   'set time 'date
   'q dim'
@@ -66,7 +66,7 @@ while (1)
   'color 'raincmap
   'define drain=ave(pr.1,t='t0',t='t1')*3600*24'
   'd maskout(drain,sftlf.3(t=1,z=1)>0.2)'
-  'xcbar 7.8 8.1 0.8 7.55'
+  'xcbar 7.7 8. 0.8 7.55'
 
   'set string 1 bl 10 0'
   'set strsiz 0.25'
@@ -86,7 +86,7 @@ while (1)
   it=1
   while(it<=24)
   'c'
-  'set t 't0+it
+  'set t 't0+(it-1)
   'q time'
   say result
   'set xlopts 1 10 0.2'
@@ -106,7 +106,7 @@ while (1)
   'color 'raincmap
   'define drain=pr.1*3600'
   'd maskout(drain,sftlf.3(t=1,z=1)>0.2)'
-  'xcbar 7.8 8.1 0.8 7.55'
+  'xcbar 7.7 8. 0.8 7.55'
   
   tstr=math_format('%02.0f', it)
   'set string 1 bl 10 0'

@@ -38,7 +38,7 @@ trap cleanup EXIT
 make_video_for_day() {
   local kind="$1"
   local day_dir="$2"
-  local day_name daily_img out_dir out_file list_file frame_count
+  local day_name daily_img out_dir out_file list_file frame_count frame
 
   day_name="$(basename "${day_dir}")"
   daily_img="${FIG_DIR}/${kind}/daily/ats_${day_name}.png"
@@ -60,9 +60,17 @@ make_video_for_day() {
   list_file="${TMPDIR_CREATED}/${kind}_${day_name}.txt"
   {
     printf "file '%s'\n" "${daily_img}"
-    find "${day_dir}" -maxdepth 1 -type f -name 'ats_*.png' | sort | while IFS= read -r frame; do
+    printf "duration 2\n"
+    while IFS= read -r frame; do
       printf "file '%s'\n" "${frame}"
-    done
+      printf "duration 0.333333\n"
+    done < <(find "${day_dir}" -maxdepth 1 -type f -name 'ats_*.png' | sort)
+    # Repeat the last frame once because concat demuxer ignores the final duration otherwise.
+    if [[ -n "${frame:-}" ]]; then
+      printf "file '%s'\n" "${frame}"
+    else
+      printf "file '%s'\n" "${daily_img}"
+    fi
   } > "${list_file}"
 
   frame_count="$(wc -l < "${list_file}" | tr -d ' ')"
@@ -74,11 +82,11 @@ make_video_for_day() {
   echo "[make] ${out_file} (${frame_count} frames)"
   "${FFMPEG}" -y \
     -nostdin \
-    -r 2 \
     -f concat \
     -safe 0 \
     -i "${list_file}" \
     -vsync cfr \
+    -r 3 \
     -pix_fmt yuv420p \
     -c:v libx264 \
     -movflags +faststart \

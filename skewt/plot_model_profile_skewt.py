@@ -248,6 +248,118 @@ def build_cases_from_csv_dates(
     return cases
 
 
+def build_cases_from_dates(
+    dates: list[str | datetime] | pd.Series,
+    *,
+    model: str,
+    lon: float,
+    lat: float,
+    daily_mean: bool = True,
+    selector: dict | None = None,
+    figure_output_dir: str | pathlib.Path = "./fig",
+    profile_output_dir: str | pathlib.Path = "./prof",
+    levb: tuple[float, float] = (1000.0, 10.0),
+    extra_case_fields: dict | None = None,
+) -> list[dict]:
+    selector_cfg = dict(selector or {"method": "nearest"})
+    extra_fields = dict(extra_case_fields or {})
+
+    cases: list[dict] = []
+    for value in dates:
+        case = {
+            "model": model,
+            "time": value if isinstance(value, str) else value.strftime("%Y-%m-%d %H:%M"),
+            "lon": lon,
+            "lat": lat,
+            "daily_mean": daily_mean,
+            "selector": dict(selector_cfg),
+            "figure_output_dir": figure_output_dir,
+            "profile_output_dir": profile_output_dir,
+            "levb": levb,
+        }
+        case.update(extra_fields)
+        cases.append(case)
+    return cases
+
+
+def build_cases_from_selected_dates(
+    *,
+    model: str,
+    lon: float,
+    lat: float,
+    tag: str = "manual",
+    daily_mean: bool = True,
+    selector: dict | None = None,
+    figure_output_dir: str | pathlib.Path = "./fig",
+    profile_output_dir: str | pathlib.Path = "./prof",
+    levb: tuple[float, float] = (1000.0, 10.0),
+    extra_case_fields: dict | None = None,
+) -> list[dict]:
+    dates = uread.read_selected_date(model, tag=tag)
+    return build_cases_from_dates(
+        dates,
+        model=model,
+        lon=lon,
+        lat=lat,
+        daily_mean=daily_mean,
+        selector=selector,
+        figure_output_dir=figure_output_dir,
+        profile_output_dir=profile_output_dir,
+        levb=levb,
+        extra_case_fields=extra_case_fields,
+    )
+
+
+def build_cases(
+    *,
+    case_source: str,
+    model: str,
+    lon: float,
+    lat: float,
+    daily_mean: bool = True,
+    selector: dict | None = None,
+    figure_output_dir: str | pathlib.Path = "./fig",
+    profile_output_dir: str | pathlib.Path = "./prof",
+    levb: tuple[float, float] = (1000.0, 10.0),
+    extra_case_fields: dict | None = None,
+    csv_path: str | pathlib.Path | None = None,
+    filters: dict[str, object] | None = None,
+    selected_tag: str = "manual",
+) -> list[dict]:
+    if case_source == "csv":
+        if csv_path is None:
+            raise ValueError("csv_path is required when case_source='csv'.")
+        return build_cases_from_csv_dates(
+            csv_path,
+            model=model,
+            lon=lon,
+            lat=lat,
+            filters=filters,
+            daily_mean=daily_mean,
+            selector=selector,
+            figure_output_dir=figure_output_dir,
+            profile_output_dir=profile_output_dir,
+            levb=levb,
+            extra_case_fields=extra_case_fields,
+        )
+
+    if case_source == "selected_date":
+        return build_cases_from_selected_dates(
+            model=model,
+            lon=lon,
+            lat=lat,
+            tag=selected_tag,
+            daily_mean=daily_mean,
+            selector=selector,
+            figure_output_dir=figure_output_dir,
+            profile_output_dir=profile_output_dir,
+            levb=levb,
+            extra_case_fields=extra_case_fields,
+        )
+
+    raise ValueError(f"Unsupported case_source: {case_source}")
+
+
 def read_raw_fields(source: str, nowtime: datetime, levb: tuple[float, float], daily_mean: bool) -> dict:
     source = source.lower()
     if source == "era5":
@@ -509,30 +621,43 @@ def run_cases_parallel(cases: list[dict], nproc: int = 5) -> list[dict]:
 
 def main() -> None:
     model = "icon"
+    model = 'nicam'
+
+    #case_source = "csv"
     filters = {
         #"wtype": "other",
         #"diurnal_rain": True,
         "model": model, 
     }
     csv_path = THIS_DIR.parent / "synoptic" / "csv" / f"{model}_2020.csv"
-    cases = build_cases_from_csv_dates(
-        csv_path,
+
+
+    case_source = "selected_date"
+    selected_tag = "manual"
+
+    cases = build_cases(
+        case_source=case_source,
         model=model,
         # TPE location
         lon=121.514689,
         lat=25.037363,
-        filters=filters,
         daily_mean=True,
         selector={
             "method": "box_mean",
             "lon_half_width": 0.125,
             "lat_half_width": 0.125,
         },
-        figure_output_dir=f"./fig/{model}",
-        profile_output_dir=f"./prof/{model}",
+        figure_output_dir=f"./fig/{model}_{case_source}",
+        profile_output_dir=f"./prof/{model}_{case_source}",
+        csv_path=csv_path,
+        filters=filters,
+        selected_tag=selected_tag,
     )
     if not cases:
-        print(f"No cases found in {csv_path} for filters={filters}.")
+        if case_source == "csv":
+            print(f"No cases found in {csv_path} for filters={filters}.")
+        else:
+            print(f"No cases found for model={model}, selected_tag={selected_tag}.")
         return
 
     nproc = min(5, len(cases))

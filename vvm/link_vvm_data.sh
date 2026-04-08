@@ -31,6 +31,25 @@ configure_host() {
       )
       ;;
 
+    cloud|mogamd)
+      SOURCE_DIRS=(
+	"/data2/VVM/taiwanvvm_summer"
+	"/data3/VVM/taiwanvvm_summer_gsrm"
+      )
+
+      NICAM_PATTERNS=(
+        "tpe_*_nicam"
+      )
+
+      ICON_PATTERNS=(
+        "tpe_*_icon"
+      )
+
+      OBS_PATTERNS=(
+        "tpe_*_at*"
+      ) 
+      ;;
+
     # Example:
     # xxx)
     #   SOURCE_DIRS=(

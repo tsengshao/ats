@@ -8,6 +8,7 @@
 *.txt
 data
 __pycache__
-obs/shao_ATdays_2020_2020_*.txt*
-skewt/prof
-vvm
+/obs/shao_ATdays_2020_2020_*.txt*
+/skewt/prof
+/vvm/*
+!/vvm/link_vvm_data.sh
